@@ -1,0 +1,19 @@
+[Unit]
+Description=Distributed Readings Gunicorn Service
+After=network.target
+
+[Service]
+User=ubuntu
+Group=www-data
+WorkingDirectory=/home/ubuntu/TechBlogAggregator
+ExecStart=/home/ubuntu/TechBlogAggregator/venv/bin/gunicorn \
+    --workers 2 \
+    --bind unix:/home/ubuntu/TechBlogAggregator/techblog.sock \
+    --access-logfile /home/ubuntu/TechBlogAggregator/data/gunicorn-access.log \
+    --error-logfile /home/ubuntu/TechBlogAggregator/data/gunicorn-error.log \
+    web.app:app
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
