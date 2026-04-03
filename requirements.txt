@@ -12,3 +12,4 @@ anthropic>=0.40.0       # Claude API client — Subsystem 2 (AI Tagger)
 playwright>=1.40.0      # Headless browser — scrapes JS-rendered blogs (LinkedIn)
 flask>=3.0.0            # Web framework — Subsystem 4 (Website)
 gunicorn>=21.2.0        # WSGI server — production deployment behind Nginx
+pytest>=8.0.0           # Test framework
