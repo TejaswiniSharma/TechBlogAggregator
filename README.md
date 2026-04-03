@@ -1,30 +1,45 @@
-# Tech Blog Learning System
-## Subsystem 1: Blog Fetcher
+# Distributed Readings — Tech Blog Aggregator
 
-A personal engineering learning system. Fetches articles from big tech engineering blogs,
-tags them by system design topic, and stores them for on-demand study and PPTX generation.
+A personal engineering learning system that aggregates articles from 12+ big tech
+engineering blogs, analyzes them with AI, and serves a clean website for study and
+interview prep.
+
+**Live:** `http://<your-ec2-ip>`
 
 ---
 
-## Quick Start
+## What It Does
+
+```
+RSS Feeds (Netflix, Uber, Airbnb, ...)
+    → Fetcher (feedparser + Playwright)
+    → AI Tagger (Claude API)
+    → Flask Website (Botanical Morning theme)
+```
+
+1. **Fetches** articles from 12 engineering blogs via RSS (+ Playwright for LinkedIn)
+2. **Analyzes** each article with Claude AI — extracts core problem, solution, system design concepts
+3. **Serves** a website with weekly article feeds, tag filtering, bookmarks, and notes
+
+---
+
+## Quick Start (Local)
 
 ```bash
-# 1. Install dependency
+# 1. Install dependencies
 pip install -r requirements.txt
+playwright install chromium
 
-# 2. Fetch all blogs
-python run_fetch.py
+# 2. Fetch articles from all blogs
+python3 run_fetch.py
 
-# 3. Browse by interview topic
-python run_fetch.py --filter-topic caching
-python run_fetch.py --filter-topic microservices
-python run_fetch.py --filter-topic distributed-systems
+# 3. AI-tag articles (needs API key)
+export ANTHROPIC_API_KEY="sk-ant-..."
+python3 run_ai_tag.py
 
-# 4. Browse by company
-python run_fetch.py --filter-topic caching --company Netflix
-
-# 5. See all available topics
-python run_fetch.py --list-topics
+# 4. Start the website
+python3 web/app.py
+# Visit http://localhost:5001
 ```
 
 ---
@@ -32,52 +47,83 @@ python run_fetch.py --list-topics
 ## File Map
 
 ```
-tech-blog-system/
-├── run_fetch.py              Entry point (CLI)
-├── requirements.txt          One dependency: feedparser
+TechBlogAggregator/
+├── run_fetch.py              CLI — fetch articles from all blogs
+├── run_ai_tag.py             CLI — send articles to Claude for analysis
+├── requirements.txt          Python dependencies
 ├── config/
-│   └── blogs.py              RSS feed URLs + metadata for each blog
+│   └── blogs.py              12 blog configs (RSS URLs, company metadata)
 ├── fetcher/
-│   ├── rss_fetcher.py        Core: fetches + normalizes RSS entries
-│   ├── topic_tagger.py       Tags articles with interview topics (keyword matching)
-│   └── storage.py            Read/write articles.json (shared data store)
+│   ├── rss_fetcher.py        RSS parser + normalizer
+│   ├── web_scraper.py        Playwright scraper (LinkedIn)
+│   ├── topic_tagger.py       Keyword-based topic tagger
+│   └── storage.py            SQLite persistence layer
+├── ai_tagger/
+│   └── claude_tagger.py      Claude API integration — structured analysis
+├── web/
+│   ├── app.py                Flask app (routes + API endpoints)
+│   └── templates/
+│       ├── base.html          Botanical Morning design system + navbar
+│       ├── home.html          Homepage (hero, stats, filters, card grid)
+│       ├── archives.html      All weeks in collapsible accordions
+│       ├── bookmarks.html     Saved articles
+│       ├── notes.html         Personal notes editor
+│       └── about.html         About page
+├── scripts/
+│   └── weekly_update.sh      Cron script — fetch + tag weekly
+├── deploy/
+│   ├── setup.sh              One-command EC2 deployment
+│   ├── techblog.service      Gunicorn systemd service
+│   └── nginx-techblog        Nginx reverse proxy config
 └── data/
-    └── articles.json         Generated on first run — your article library
+    └── techblogs.db           SQLite database (generated on first run)
 ```
 
 ---
 
-## Architecture Decisions & Why
+## Deploy to AWS EC2
 
-### Why RSS over scraping?
-RSS is a *published contract*. When a blog redesigns, the RSS feed stays stable.
-Web scraping breaks every time HTML structure changes (which is frequent).
-If a company doesn't publish RSS (some don't), scraping becomes the fallback.
+On a fresh Ubuntu 22.04 `t2.micro` (Free Tier):
 
-### Why JSON storage, not a database?
-For learning: JSON is transparent. `cat data/articles.json` tells you exactly what's stored.
-For production: SQLite when you need queries, Postgres when you need concurrent writes.
-Don't add complexity until you have a problem that complexity solves.
+```bash
+curl -s https://raw.githubusercontent.com/TejaswiniSharma/TechBlogAggregator/main/deploy/setup.sh | bash
+```
 
-### Why keyword tagging instead of AI tagging?
-This runs on every article, potentially hundreds per day.
-A Claude API call costs money and milliseconds. Keywords cost nothing.
-Progressive enhancement: instrument keyword tagging first, measure accuracy,
-then upgrade to AI tagging (Subsystem 2) where it's actually needed.
+This installs everything: Python, Nginx, Gunicorn, clones the repo, and starts the server.
 
-### Why sequential fetch instead of async?
-Start simple. Race conditions in async code are hard to debug.
-When you have performance data showing the bottleneck is network I/O,
-switch to `asyncio + aiohttp`. The `fetch_blog()` interface stays identical.
-
-### Why deduplicate by URL?
-RSS feeds republish articles on edits. Without deduplication, you get 30 copies
-of the same post. URL is the natural canonical ID for web content.
-In production: a bloom filter handles this at LinkedIn/Netflix scale.
+See `deploy/setup.sh` for the full breakdown.
 
 ---
 
-## Interview Topics Available
+## Website Features
+
+| Page | What it does |
+|------|-------------|
+| **Home** | Greeting, weekly stats, tag filter pills, 2-column article cards with bookmark toggle |
+| **Archives** | All weeks in collapsible accordions, same filtering |
+| **Bookmarks** | Saved articles with live badge count |
+| **Notes** | Personal notes editor linked to articles |
+| **About** | System overview, pipeline steps, tech stack |
+
+Design: **Botanical Morning** — a warm, natural theme with leaf greens, blossom pinks, and cream backgrounds. Lora serif headings, Inter sans body text.
+
+---
+
+## Architecture
+
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| RSS Fetcher | feedparser | Handles RSS 0.9, 2.0, Atom — normalizes all formats |
+| LinkedIn Scraper | Playwright | LinkedIn has no RSS — JS-rendered SPA needs headless browser |
+| AI Tagger | Claude Haiku | Fast + cheap for batch analysis — extracts problem/solution/concepts |
+| Storage | SQLite | Single-file DB, no server needed, supports queries and indexes |
+| Web Framework | Flask | Lightweight, perfect for personal tools |
+| Production Server | Gunicorn + Nginx | Gunicorn handles Python, Nginx handles HTTP |
+| Hosting | AWS EC2 Free Tier | t2/t3.micro, 750 hours/month free |
+
+---
+
+## Interview Topics Covered
 
 | Topic | Key Concepts |
 |-------|-------------|
@@ -99,22 +145,10 @@ In production: a bloom filter handles this at LinkedIn/Netflix scale.
 
 ---
 
-## What's Next
+## Engineering Blogs Tracked
 
-| Subsystem | What it does | Key technology |
-|-----------|-------------|---------------|
-| **2 - AI Tagger** | Sends articles to Claude API, extracts: core problem, how they solved it, interview concepts | Anthropic API |
-| **3 - PPTX Builder** | Auto-generates study slide for each article | python-pptx |
-| **4 - Tracker** | Spaced repetition queue, mark articles done | JSON + date math |
+Netflix · Airbnb · Uber · LinkedIn · Stripe · Meta · Cloudflare · AWS · Dropbox · Spotify · DoorDash · Shopify
 
 ---
 
-## Real-World Connections
-
-Every design decision in this system maps to a real engineering pattern:
-
-- **Normalize at ingestion** → How Stripe handles multi-provider webhooks
-- **Shared data store** → How Netflix's microservices share state via Cassandra
-- **Bulkhead pattern** → Why one bad RSS feed doesn't kill the whole fetch run
-- **Separate config from code** → 12-Factor App, used by Shopify and DoorDash
-- **Dedup by content hash** → How LinkedIn deduplicates feed stories at scale
+Built by Tejaswini for system design interview prep.
