@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Distributed Readings{% endblock %}
+
+{% block content %}
+<!-- Hero -->
+<div class="hero">
+  <div class="container hero-inner">
+    <svg class="hero-watermark" width="200" height="200" viewBox="0 0 200 200" fill="none">
+      <ellipse cx="100" cy="100" rx="72" ry="98" transform="rotate(-18 100 100)" fill="#4A7C59"/>
+    </svg>
+    <div class="hero-eyebrow">
+      <span class="hero-dot"></span>
+      <span class="hero-greeting">{{ greeting }}, Tejaswini</span>
+    </div>
+    <h1 class="hero-title"><span>Distributed</span> Readings</h1>
+    <p class="hero-tagline">Aggregating engineering wisdom, one blog at a time.</p>
+    <div class="hero-stats">
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.new_this_week }}</span>
+        <span class="stat-label">new this week</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value">{{ bookmark_count }}</span>
+        <span class="stat-label">bookmarked</span>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.sources }}</span>
+        <span class="stat-label">sources</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filter bar -->
+<div class="filter-bar">
+  <div class="container filter-inner">
+    <span class="filter-label">filter</span>
+    <a href="/" class="filter-pill {{ 'active' if not active_tag }}">all</a>
+    {% for tag in all_tags %}
+    <a href="/?tag={{ tag }}" class="filter-pill {{ 'active' if active_tag == tag }}">{{ tag }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Feed -->
+<main class="container" style="padding-top: 24px; padding-bottom: 40px;">
+  {% for section in week_sections %}
+  <div style="margin-bottom: 28px;">
+    <!-- Week header -->
+    <div class="week-header">
+      <span class="week-label">{{ section.label }}</span>
+      <span class="week-dates">{{ section.date_range }}</span>
+      <div class="week-line"></div>
+    </div>
+
+    {% if section.articles %}
+    <div class="card-grid">
+      {% for article in section.articles %}
+      <div class="card">
+        <div class="card-top">
+          {% set style = get_source_style(article.company) %}
+          <span class="source-pill" style="background: {{ style.bg }}; color: {{ style.text }};">
+            {{ article.company }}
+          </span>
+          <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="card-link" aria-label="Open article">↗</a>
+        </div>
+        <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" style="text-decoration: none;"><h3 class="card-title">{{ article.title }}</h3></a>
+        <p class="card-excerpt">
+          {% if article.ai_problem %}{{ article.ai_problem }}{% elif article.summary %}{{ article.summary }}{% endif %}
+        </p>
+        <div class="card-bottom">
+          <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            {% for tag in parse_tags(article.tags)[:2] %}
+            <span class="tag-pill">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          <div class="card-meta">
+            <span class="read-time">{{ ((article.summary or '')|length // 200 + 3) }} min</span>
+            <button class="bookmark-btn" onclick="toggleBookmark(this, '{{ article.id }}')" aria-label="Bookmark">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z"
+                      stroke="#8B5E3C" stroke-width="1.2"
+                      fill="{{ '#F5EDE5' if article.bookmarked else 'none' }}"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">No articles found for this filter.</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  {% if not week_sections %}
+  <div class="empty-state">No articles yet. Run the fetcher to get started.</div>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleBookmark(btn, articleId) {
+  fetch('/api/bookmark', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({article_id: articleId})
+  })
+  .then(r => r.json())
+  .then(data => {
+    // Update bookmark icon
+    const path = btn.querySelector('path');
+    path.setAttribute('fill', data.bookmarked ? '#F5EDE5' : 'none');
+    // Update nav badge
+    const badge = document.querySelector('.nav-badge');
+    if (data.total_bookmarks > 0) {
+      if (badge) {
+        badge.textContent = data.total_bookmarks;
+      } else {
+        const bookmarkLink = document.querySelector('.nav-bookmarks');
+        const span = document.createElement('span');
+        span.className = 'nav-badge';
+        span.textContent = data.total_bookmarks;
+        bookmarkLink.appendChild(span);
+      }
+    } else if (badge) {
+      badge.remove();
+    }
+  });
+}
+</script>
+{% endblock %}

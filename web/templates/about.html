@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}About — Distributed Readings{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">About</h1>
+    <p class="page-subtitle">The story behind Distributed Readings.</p>
+  </div>
+
+  <div style="padding: 24px 0 40px; max-width: 640px;">
+
+    <div class="about-card">
+      <h2>Why I Built This</h2>
+      <p>
+        While preparing for system design interviews, I realized that the best way to understand
+        distributed systems isn't just reading textbooks — it's seeing how companies like Netflix,
+        Uber, and Stripe actually solve real problems at scale.
+      </p>
+      <p>
+        I started reading engineering blogs religiously. But keeping track of articles across a dozen
+        different blogs, remembering which ones were relevant to which concepts, and connecting them
+        back to interview topics became its own challenge.
+      </p>
+      <p>
+        So I built Distributed Readings — a personal tool that automatically aggregates engineering
+        blog posts, uses AI to extract the key system design concepts, and gives me a clean place
+        to take notes and track my learning.
+      </p>
+    </div>
+
+    <div class="about-card">
+      <h2>How It Works</h2>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div style="min-width: 28px; height: 28px; border-radius: 50%; background: var(--leaf-soft); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--leaf);">1</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--bark); margin-bottom: 2px;">Fetch</div>
+            <p style="margin: 0;">RSS feeds from 12+ engineering blogs are checked weekly for new posts.</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div style="min-width: 28px; height: 28px; border-radius: 50%; background: var(--blossom-soft); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--blossom-dark);">2</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--bark); margin-bottom: 2px;">Analyze</div>
+            <p style="margin: 0;">Claude AI reads each article and extracts the core problem, solution approach, and system design concepts.</p>
+          </div>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: flex-start;">
+          <div style="min-width: 28px; height: 28px; border-radius: 50%; background: var(--brew-soft); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 500; color: var(--brew);">3</div>
+          <div>
+            <div style="font-size: 13px; font-weight: 500; color: var(--bark); margin-bottom: 2px;">Read & Learn</div>
+            <p style="margin: 0;">Articles appear here with summaries, tags, and space for personal notes — connecting real-world engineering to interview concepts.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-card">
+      <h2>Tech Stack</h2>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+        {% for tech in ['Python', 'Flask', 'SQLite', 'Claude AI', 'RSS / Playwright', 'Nginx', 'AWS EC2'] %}
+        <span class="tag-pill" style="font-size: 11px; padding: 3px 10px;">{{ tech }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="about-card">
+      <h2>Sources</h2>
+      <p>Currently tracking engineering blogs from:</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px;">
+        {% for company in ['Netflix', 'Airbnb', 'Uber', 'LinkedIn', 'Stripe', 'Meta', 'Cloudflare', 'AWS', 'Dropbox', 'Spotify', 'DoorDash', 'Shopify'] %}
+        {% set style = get_source_style(company) %}
+        <span class="source-pill" style="background: {{ style.bg }}; color: {{ style.text }}; font-size: 11px; padding: 3px 10px;">
+          {{ company }}
+        </span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="text-align: center; padding-top: 8px; font-size: 12px; color: var(--bark-muted);">
+      Built with care by Tejaswini
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+# requirements.txt
+#
+# WHY pin versions? (e.g., feedparser==6.0.11 instead of feedparser)
+# Unpinned deps break when the library releases a new version with breaking changes.
+# This happened to countless teams with PyYAML, SQLAlchemy, and boto3.
+# Pin in requirements.txt; only update intentionally.
+#
+# Install with: pip install -r requirements.txt
+
+feedparser==6.0.11      # RSS/Atom parser — handles all feed format quirks
+anthropic>=0.40.0       # Claude API client — Subsystem 2 (AI Tagger)
+playwright>=1.40.0      # Headless browser — scrapes JS-rendered blogs (LinkedIn)
+python-pptx>=1.0.0      # PowerPoint builder — Subsystem 3 (PPTX deck generator)

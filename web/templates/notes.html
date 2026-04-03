@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Notes — Distributed Readings{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div>
+        <h1 class="page-title">Notes</h1>
+        <p class="page-subtitle">Your learnings and takeaways from each article.</p>
+      </div>
+      <button class="btn btn-leaf" onclick="showNewNote()">+ New Note</button>
+    </div>
+  </div>
+
+  <div class="notes-layout">
+    <!-- Sidebar -->
+    <div class="notes-sidebar">
+      {% if notes_list %}
+        {% for note in notes_list %}
+        <a href="/notes?note_id={{ note.note_id }}" class="note-item {{ 'active' if selected and selected.id == note.note_id }}">
+          <div class="note-item-title">{{ note.title }}</div>
+          <div class="note-item-company">
+            {% set style = get_source_style(note.company) %}
+            <span style="color: {{ style.text }};">{{ note.company }}</span>
+          </div>
+          <div class="note-item-date">{{ note.updated_at[:10] if note.updated_at else '' }}</div>
+        </a>
+        {% endfor %}
+      {% else %}
+        <div class="empty-state" style="padding: 24px 0;">No notes yet.</div>
+      {% endif %}
+    </div>
+
+    <!-- Editor -->
+    <div class="note-editor">
+      {% if selected %}
+        <!-- Editing existing note -->
+        <div class="note-editor-header">
+          <h2 style="font-size: 15px; font-weight: 500; color: var(--bark); margin-bottom: 4px;">{{ selected.article_title }}</h2>
+          <div style="display: flex; align-items: center; justify-content: space-between;">
+            <span style="font-size: 11px; color: var(--bark-muted);">
+              {% set style = get_source_style(selected.company) %}
+              <span style="color: {{ style.text }};">{{ selected.company }}</span>
+              · <a href="{{ selected.url }}" target="_blank" style="color: var(--leaf-mid);">Open article ↗</a>
+            </span>
+            <button class="btn btn-danger" onclick="deleteNote({{ selected.id }})">Delete</button>
+          </div>
+        </div>
+        <textarea id="note-content">{{ selected.content }}</textarea>
+        <div style="margin-top: 12px; display: flex; gap: 8px;">
+          <button class="btn btn-leaf" onclick="saveNote({{ selected.id }}, '{{ selected.article_id }}')">Save</button>
+          <span id="save-status" style="font-size: 11px; color: var(--bark-muted); align-self: center;"></span>
+        </div>
+
+      {% else %}
+        <!-- New note form (hidden by default unless no notes) -->
+        <div id="new-note-form" style="{{ '' if not notes_list else 'display:none;' }}">
+          <div class="note-editor-header">
+            <h2 style="font-size: 15px; font-weight: 500; color: var(--bark);">New Note</h2>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 11px; color: var(--bark-muted); text-transform: uppercase; letter-spacing: 0.5px;">Article</label>
+            <select id="article-select" style="width: 100%; margin-top: 4px;">
+              <option value="">Select an article...</option>
+              {% for a in all_articles %}
+              <option value="{{ a.id }}">{{ a.company }} — {{ a.title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <textarea id="new-note-content" placeholder="Write your learnings, takeaways, interview notes..."></textarea>
+          <div style="margin-top: 12px; display: flex; gap: 8px;">
+            <button class="btn btn-leaf" onclick="createNote()">Save Note</button>
+            <span id="new-save-status" style="font-size: 11px; color: var(--bark-muted); align-self: center;"></span>
+          </div>
+        </div>
+
+        {% if notes_list %}
+        <div id="select-prompt" class="empty-state">
+          Select a note from the sidebar, or create a new one.
+        </div>
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showNewNote() {
+  const form = document.getElementById('new-note-form');
+  const prompt = document.getElementById('select-prompt');
+  if (form) form.style.display = 'block';
+  if (prompt) prompt.style.display = 'none';
+}
+
+function saveNote(noteId, articleId) {
+  const content = document.getElementById('note-content').value;
+  const status = document.getElementById('save-status');
+  fetch('/api/notes', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({note_id: noteId, article_id: articleId, content: content})
+  })
+  .then(r => r.json())
+  .then(data => {
+    status.textContent = 'Saved!';
+    status.style.color = 'var(--leaf)';
+    setTimeout(() => { status.textContent = ''; }, 2000);
+  });
+}
+
+function createNote() {
+  const articleId = document.getElementById('article-select').value;
+  const content = document.getElementById('new-note-content').value;
+  const status = document.getElementById('new-save-status');
+
+  if (!articleId) { status.textContent = 'Please select an article.'; status.style.color = '#dc2626'; return; }
+  if (!content.trim()) { status.textContent = 'Please write something.'; status.style.color = '#dc2626'; return; }
+
+  fetch('/api/notes', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({article_id: articleId, content: content})
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) location.reload();
+  });
+}
+
+function deleteNote(noteId) {
+  if (!confirm('Delete this note?')) return;
+  fetch('/api/notes/' + noteId, { method: 'DELETE' })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) window.location.href = '/notes';
+  });
+}
+</script>
+{% endblock %}

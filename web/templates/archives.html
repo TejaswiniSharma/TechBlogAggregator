@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block title %}Archives — Distributed Readings{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">Archives</h1>
+    <p class="page-subtitle">Browse past weeks of engineering reads.</p>
+  </div>
+
+  <!-- Filter bar -->
+  <div style="padding: 14px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+    <span class="filter-label">filter</span>
+    <a href="/archives" class="filter-pill {{ 'active' if not active_tag }}">all</a>
+    {% for tag in all_tags %}
+    <a href="/archives?tag={{ tag }}" class="filter-pill {{ 'active' if active_tag == tag }}">{{ tag }}</a>
+    {% endfor %}
+  </div>
+
+  <!-- Week accordions -->
+  <div style="padding-bottom: 40px;">
+    {% for week in weeks %}
+    <div class="archive-week" id="week-{{ week.week_label }}">
+      <button class="archive-toggle" onclick="this.parentElement.classList.toggle('open')">
+        <div class="archive-toggle-left">
+          <svg class="archive-arrow" width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span style="font-weight: 500; color: var(--bark);">{{ week.week_label }}</span>
+          <span class="week-dates">{{ week.date_range }}</span>
+        </div>
+        <span class="archive-count">{{ week.count }} article{{ 's' if week.count != 1 }}</span>
+      </button>
+      <div class="archive-body">
+        <div class="card-grid">
+          {% for article in week.articles %}
+          <div class="card">
+            <div class="card-top">
+              {% set style = get_source_style(article.company) %}
+              <span class="source-pill" style="background: {{ style.bg }}; color: {{ style.text }};">
+                {{ article.company }}
+              </span>
+              <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="card-link">↗</a>
+            </div>
+            <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" style="text-decoration: none;"><h3 class="card-title">{{ article.title }}</h3></a>
+            <p class="card-excerpt">
+              {% if article.ai_problem %}{{ article.ai_problem }}{% elif article.summary %}{{ article.summary }}{% endif %}
+            </p>
+            <div class="card-bottom">
+              <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+                {% for tag in parse_tags(article.tags)[:2] %}
+                <span class="tag-pill">{{ tag }}</span>
+                {% endfor %}
+              </div>
+              <div class="card-meta">
+                <span class="read-time">{{ ((article.summary or '')|length // 200 + 3) }} min</span>
+                <button class="bookmark-btn" onclick="toggleBookmark(this, '{{ article.id }}')" aria-label="Bookmark">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z"
+                          stroke="#8B5E3C" stroke-width="1.2"
+                          fill="{{ '#F5EDE5' if article.bookmarked else 'none' }}"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+
+    {% if not weeks %}
+    <div class="empty-state">No archived articles yet.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleBookmark(btn, articleId) {
+  fetch('/api/bookmark', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({article_id: articleId})
+  })
+  .then(r => r.json())
+  .then(data => {
+    const path = btn.querySelector('path');
+    path.setAttribute('fill', data.bookmarked ? '#F5EDE5' : 'none');
+    const badge = document.querySelector('.nav-badge');
+    if (data.total_bookmarks > 0) {
+      if (badge) { badge.textContent = data.total_bookmarks; }
+      else {
+        const link = document.querySelector('.nav-bookmarks');
+        const span = document.createElement('span');
+        span.className = 'nav-badge';
+        span.textContent = data.total_bookmarks;
+        link.appendChild(span);
+      }
+    } else if (badge) { badge.remove(); }
+  });
+}
+</script>
+{% endblock %}

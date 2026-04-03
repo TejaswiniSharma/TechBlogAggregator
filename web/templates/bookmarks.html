@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Bookmarks — Distributed Readings{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <h1 class="page-title">Bookmarks</h1>
+    <p class="page-subtitle">Your saved articles for later reading.</p>
+  </div>
+
+  <div style="padding: 24px 0 40px;">
+    {% if articles %}
+    <div class="card-grid">
+      {% for article in articles %}
+      <div class="card" id="card-{{ article.id }}">
+        <div class="card-top">
+          {% set style = get_source_style(article.company) %}
+          <span class="source-pill" style="background: {{ style.bg }}; color: {{ style.text }};">
+            {{ article.company }}
+          </span>
+          <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="card-link">↗</a>
+        </div>
+        <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" style="text-decoration: none;"><h3 class="card-title">{{ article.title }}</h3></a>
+        <p class="card-excerpt">
+          {% if article.ai_problem %}{{ article.ai_problem }}{% elif article.summary %}{{ article.summary }}{% endif %}
+        </p>
+        <div class="card-bottom">
+          <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            {% for tag in parse_tags(article.tags)[:2] %}
+            <span class="tag-pill">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          <div class="card-meta">
+            <span class="read-time">{{ ((article.summary or '')|length // 200 + 3) }} min</span>
+            <button class="bookmark-btn" onclick="removeBookmark('{{ article.id }}')" aria-label="Remove bookmark">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z"
+                      stroke="#8B5E3C" stroke-width="1.2" fill="#F5EDE5"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+      <svg width="24" height="24" viewBox="0 0 16 16" fill="none" style="margin: 0 auto 12px; display: block; opacity: 0.4;">
+        <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z" stroke="#8B5E3C" stroke-width="1.2" fill="none"/>
+      </svg>
+      No bookmarks yet. Click the bookmark icon on any article to save it here.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function removeBookmark(articleId) {
+  fetch('/api/bookmark', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({article_id: articleId})
+  })
+  .then(r => r.json())
+  .then(data => {
+    // Remove the card with a fade
+    const card = document.getElementById('card-' + articleId);
+    if (card) {
+      card.style.transition = 'opacity 0.2s';
+      card.style.opacity = '0';
+      setTimeout(() => {
+        card.remove();
+        // Check if grid is now empty
+        const grid = document.querySelector('.card-grid');
+        if (grid && grid.children.length === 0) {
+          location.reload();
+        }
+      }, 200);
+    }
+    // Update nav badge
+    const badge = document.querySelector('.nav-badge');
+    if (data.total_bookmarks > 0) {
+      if (badge) badge.textContent = data.total_bookmarks;
+    } else if (badge) { badge.remove(); }
+  });
+}
+</script>
+{% endblock %}
