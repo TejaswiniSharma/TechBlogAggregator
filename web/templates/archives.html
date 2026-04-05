@@ -9,12 +9,22 @@
   </div>
 
   <!-- Filter bar -->
-  <div style="padding: 14px 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-    <span class="filter-label">filter</span>
-    <a href="/archives" class="filter-pill {{ 'active' if not active_tag }}">all</a>
-    {% for tag in all_tags %}
-    <a href="/archives?tag={{ tag }}" class="filter-pill {{ 'active' if active_tag == tag }}">{{ tag }}</a>
-    {% endfor %}
+  <div style="padding: 14px 0;">
+    <div class="filter-row">
+      <span class="filter-label">topics</span>
+      <a href="/archives?{{ 'company=' + active_company if active_company else '' }}" class="filter-pill {{ 'active' if not active_tag }}">all</a>
+      {% for tag in all_tags %}
+      <a href="/archives?tag={{ tag }}{{ '&company=' + active_company if active_company else '' }}" class="filter-pill {{ 'active' if active_tag == tag }}">{{ tag }}</a>
+      {% endfor %}
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">source</span>
+      <a href="/archives?{{ 'tag=' + active_tag if active_tag else '' }}" class="company-pill {{ 'active' if not active_company }}">all</a>
+      {% for c in all_companies %}
+      {% set style = get_source_style(c) %}
+      <a href="/archives?company={{ c }}{{ '&tag=' + active_tag if active_tag else '' }}" class="company-pill {{ 'active' if active_company == c }}" style="color: {{ style.text }};{{ ' background: ' + style.bg + ';' if active_company == c else '' }}">{{ c }}</a>
+      {% endfor %}
+    </div>
   </div>
 
   <!-- Week accordions -->

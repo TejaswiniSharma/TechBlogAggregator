@@ -108,6 +108,7 @@ def inject_helpers():
 @app.route("/")
 def home():
     tag = request.args.get("tag")
+    company = request.args.get("company")
 
     # Get latest 2 weeks
     weeks = query_db(
@@ -123,19 +124,25 @@ def home():
             all_tags.add(t)
     all_tags = sorted(all_tags)
 
+    # Get all unique companies
+    all_companies = sorted([r["company"] for r in query_db("SELECT DISTINCT company FROM articles ORDER BY company")])
+
     # Build week sections with articles
     week_sections = []
     for i, wl in enumerate(week_labels):
+        conditions = ["week_label = ?"]
+        params = [wl]
         if tag:
-            articles = query_db(
-                "SELECT * FROM articles WHERE week_label = ? AND tags LIKE ? ORDER BY company, title",
-                (wl, f'%"{tag}"%')
-            )
-        else:
-            articles = query_db(
-                "SELECT * FROM articles WHERE week_label = ? ORDER BY company, title",
-                (wl,)
-            )
+            conditions.append("tags LIKE ?")
+            params.append(f'%"{tag}"%')
+        if company:
+            conditions.append("company = ?")
+            params.append(company)
+
+        where = " AND ".join(conditions)
+        articles = query_db(
+            f"SELECT * FROM articles WHERE {where} ORDER BY company, title", params
+        )
 
         # Parse week label to date range (ISO week: Monday–Sunday)
         week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
@@ -159,13 +166,16 @@ def home():
     return render_template("home.html",
                            week_sections=week_sections,
                            all_tags=all_tags,
+                           all_companies=all_companies,
                            active_tag=tag,
+                           active_company=company,
                            stats=stats)
 
 
 @app.route("/archives")
 def archives():
     tag = request.args.get("tag")
+    company = request.args.get("company")
 
     weeks = query_db(
         "SELECT DISTINCT week_label FROM articles WHERE week_label != '' ORDER BY week_label DESC"
@@ -178,19 +188,24 @@ def archives():
             all_tags.add(t)
     all_tags = sorted(all_tags)
 
+    all_companies = sorted([r["company"] for r in query_db("SELECT DISTINCT company FROM articles ORDER BY company")])
+
     week_data = []
     for w in weeks:
         wl = w["week_label"]
+        conditions = ["week_label = ?"]
+        params = [wl]
         if tag:
-            articles = query_db(
-                "SELECT * FROM articles WHERE week_label = ? AND tags LIKE ? ORDER BY company, title",
-                (wl, f'%"{tag}"%')
-            )
-        else:
-            articles = query_db(
-                "SELECT * FROM articles WHERE week_label = ? ORDER BY company, title",
-                (wl,)
-            )
+            conditions.append("tags LIKE ?")
+            params.append(f'%"{tag}"%')
+        if company:
+            conditions.append("company = ?")
+            params.append(company)
+
+        where = " AND ".join(conditions)
+        articles = query_db(
+            f"SELECT * FROM articles WHERE {where} ORDER BY company, title", params
+        )
 
         if not articles:
             continue
@@ -208,7 +223,9 @@ def archives():
     return render_template("archives.html",
                            weeks=week_data,
                            all_tags=all_tags,
-                           active_tag=tag)
+                           all_companies=all_companies,
+                           active_tag=tag,
+                           active_company=company)
 
 
 @app.route("/bookmarks")
