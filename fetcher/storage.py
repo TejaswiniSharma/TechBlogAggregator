@@ -91,7 +91,7 @@ def add_articles(new_articles: list[dict]) -> dict:
     skipped = 0
 
     for a in new_articles:
-        week_label = _get_week_label(a.get("fetched_at", "")) or _get_week_label(a.get("published", ""))
+        week_label = _get_week_label(a.get("published", "")) or _get_week_label(a.get("fetched_at", ""))
         try:
             conn.execute("""
                 INSERT INTO articles
