@@ -154,16 +154,12 @@ def home():
         else:
             fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
 
-        week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
-        week_end = week_start + timedelta(days=6)
-
         def _ordinal(d):
             n = d.day
             return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
 
         week_sections.append({
             "label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
-            "date_range": f"articles from {week_start.strftime('%b %d')} – {week_end.strftime('%b %d')}",
             "articles": articles,
         })
 
@@ -233,16 +229,12 @@ def archives():
         else:
             fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
 
-        week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
-        week_end = week_start + timedelta(days=6)
-
         def _ordinal(d):
             n = d.day
             return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
 
         week_data.append({
             "week_label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
-            "date_range": f"articles from {week_start.strftime('%b %d')} – {week_end.strftime('%b %d')}",
             "count": len(articles),
             "articles": articles,
         })

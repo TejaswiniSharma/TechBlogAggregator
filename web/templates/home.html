@@ -58,10 +58,12 @@
 <main class="container" style="padding-top: 24px; padding-bottom: 40px;">
   {% for section in week_sections %}
   <div style="margin-bottom: 28px;">
+    {% if not loop.first %}
+    <hr class="section-divider">
+    {% endif %}
     <!-- Week header -->
     <div class="week-header">
-      <span class="week-label">{{ section.label }}</span>
-      <span class="week-dates">{{ section.date_range }}</span>
+      <span class="week-label" style="font-weight: 600;">{{ section.label }}</span>
       <div class="week-line"></div>
     </div>
 

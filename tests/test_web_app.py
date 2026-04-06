@@ -74,7 +74,6 @@ class TestArchives:
         html = resp.data.decode()
         # Archives skips the latest 2 weeks; shows older weeks with fetch date format
         assert "Fetched" in html
-        assert "articles from" in html
 
     def test_tag_filter(self, flask_client):
         resp = flask_client.get("/archives?tag=caching")
