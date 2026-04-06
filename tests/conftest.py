@@ -77,6 +77,11 @@ def flask_client(tmp_db, monkeypatch):
         make_article(1, company="Netflix", tags=["caching"], summary="Redis caching at scale"),
         make_article(2, company="Uber", tags=["distributed-systems"], summary="Uber's distributed tracing"),
         make_article(3, company="Netflix", tags=["caching", "databases"], summary="Caching with DynamoDB"),
+        # Articles across 3 weeks so archives (which skips latest 2) has data
+        {**make_article(4, company="Airbnb", tags=["microservices"], summary="Airbnb service mesh"),
+         "published": "2026-03-23T10:00:00", "fetched_at": "2026-03-23T10:00:00"},
+        {**make_article(5, company="Meta", tags=["ml-systems"], summary="Meta ML infra"),
+         "published": "2026-03-16T10:00:00", "fetched_at": "2026-03-16T10:00:00"},
     ])
 
     web_app.app.config["TESTING"] = True

@@ -144,13 +144,19 @@ def home():
             f"SELECT * FROM articles WHERE {where} ORDER BY company, title", params
         )
 
-        # Parse week label to date range (ISO week: Monday–Sunday)
+        # Parse week label to show fetch date context
+        # The cron fetches on Monday 8 AM, so fetched_date = Sunday end of that ISO week + 1 day
         week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
         week_end = week_start + timedelta(days=6)
+        fetch_date = week_end + timedelta(days=1)  # Monday after the article week
+
+        def _ordinal(d):
+            n = d.day
+            return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
 
         week_sections.append({
-            "label": "Current Week" if i == 0 else "Previous Week",
-            "date_range": f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}",
+            "label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
+            "date_range": f"articles from {week_start.strftime('%b %d')} – {week_end.strftime('%b %d')}",
             "articles": articles,
         })
 
@@ -177,8 +183,9 @@ def archives():
     tag = request.args.get("tag")
     company = request.args.get("company")
 
+    # Skip the latest 2 weeks (already shown on home page)
     weeks = query_db(
-        "SELECT DISTINCT week_label FROM articles WHERE week_label != '' ORDER BY week_label DESC"
+        "SELECT DISTINCT week_label FROM articles WHERE week_label != '' ORDER BY week_label DESC LIMIT -1 OFFSET 2"
     )
 
     all_articles_tags = query_db("SELECT tags FROM articles")
@@ -212,10 +219,15 @@ def archives():
 
         week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
         week_end = week_start + timedelta(days=6)
+        fetch_date = week_end + timedelta(days=1)
+
+        def _ordinal(d):
+            n = d.day
+            return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
 
         week_data.append({
-            "week_label": wl,
-            "date_range": f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}",
+            "week_label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
+            "date_range": f"articles from {week_start.strftime('%b %d')} – {week_end.strftime('%b %d')}",
             "count": len(articles),
             "articles": articles,
         })
