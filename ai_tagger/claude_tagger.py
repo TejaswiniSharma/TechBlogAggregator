@@ -142,6 +142,13 @@ def analyze_article(article: dict) -> dict:
     # Extract the text content from the response
     raw_text = response.content[0].text.strip()
 
+    # Strip markdown code fences if Claude wraps the JSON in ```json ... ```
+    if raw_text.startswith("```"):
+        lines = raw_text.split("\n")
+        # Remove first line (```json) and last line (```)
+        lines = [l for l in lines if not l.strip().startswith("```")]
+        raw_text = "\n".join(lines).strip()
+
     # Parse the JSON Claude returned
     # WHY wrap in try/except? Claude very reliably returns valid JSON when asked,
     # but network issues or truncated responses can cause malformed output.
