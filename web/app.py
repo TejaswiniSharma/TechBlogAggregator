@@ -144,11 +144,18 @@ def home():
             f"SELECT * FROM articles WHERE {where} ORDER BY company, title", params
         )
 
-        # Parse week label to show fetch date context
-        # The cron fetches on Monday 8 AM, so fetched_date = Sunday end of that ISO week + 1 day
+        # Get actual fetch date from the articles themselves
+        fetch_row = query_db(
+            "SELECT MAX(fetched_at) as latest_fetch FROM articles WHERE week_label = ?",
+            (wl,), one=True
+        )
+        if fetch_row and fetch_row["latest_fetch"]:
+            fetch_date = datetime.strptime(fetch_row["latest_fetch"][:10], "%Y-%m-%d")
+        else:
+            fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
+
         week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
         week_end = week_start + timedelta(days=6)
-        fetch_date = week_end + timedelta(days=1)  # Monday after the article week
 
         def _ordinal(d):
             n = d.day
@@ -217,9 +224,17 @@ def archives():
         if not articles:
             continue
 
+        fetch_row = query_db(
+            "SELECT MAX(fetched_at) as latest_fetch FROM articles WHERE week_label = ?",
+            (wl,), one=True
+        )
+        if fetch_row and fetch_row["latest_fetch"]:
+            fetch_date = datetime.strptime(fetch_row["latest_fetch"][:10], "%Y-%m-%d")
+        else:
+            fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
+
         week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
         week_end = week_start + timedelta(days=6)
-        fetch_date = week_end + timedelta(days=1)
 
         def _ordinal(d):
             n = d.day
