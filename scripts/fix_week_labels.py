@@ -6,7 +6,7 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "techblog.db")
+DB_FILE = os.path.join(os.path.dirname(__file__), "..", "data", "techblogs.db")
 
 conn = sqlite3.connect(DB_FILE)
 conn.row_factory = sqlite3.Row
