@@ -4,7 +4,7 @@ A personal engineering learning system that aggregates articles from 12+ big tec
 engineering blogs, analyzes them with AI, and serves a clean website for study and
 interview prep.
 
-**Live:** `http://<your-ec2-ip>`
+**Live:** https://distributedreadings.uk
 
 ---
 

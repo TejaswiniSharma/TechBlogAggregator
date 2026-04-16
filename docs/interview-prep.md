@@ -2,7 +2,7 @@
 
 > A tech blog aggregation system that collects, analyzes, and curates engineering blog posts from 7 major tech companies. Built as a personal learning tool for system design interview prep.
 
-**Live on:** AWS EC2 Free Tier
+**Live on:** https://distributedreadings.uk (AWS EC2 + Cloudflare)
 **Stack:** Python, Flask, SQLite, Nginx, Gunicorn, Claude AI, AWS SES, GitHub Actions
 
 ---
