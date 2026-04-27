@@ -11,6 +11,7 @@ feedparser==6.0.11      # RSS/Atom parser — handles all feed format quirks
 anthropic>=0.40.0       # Claude API client — Subsystem 2 (AI Tagger)
 playwright>=1.40.0      # Headless browser — scrapes JS-rendered blogs (LinkedIn)
 flask>=3.0.0            # Web framework — Subsystem 4 (Website)
+flask-limiter>=3.5.0    # Rate limiting on API endpoints
 gunicorn>=21.2.0        # WSGI server — production deployment behind Nginx
 boto3>=1.34.0           # AWS SDK — SES email notifications
 pytest>=8.0.0           # Test framework

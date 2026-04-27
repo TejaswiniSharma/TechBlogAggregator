@@ -11,11 +11,22 @@ import os
 import sqlite3
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, g
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_FILE = os.path.join(PROJECT_ROOT, "data", "techblogs.db")
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+app.config["MAX_CONTENT_LENGTH"] = 64 * 1024  # 64KB max request body
+
+# Rate limiter — keyed by IP address
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],  # No global limit — only apply per-route
+    storage_uri="memory://",
+)
 
 
 # ── Database helpers ──────────────────────────────────────────────────────────
@@ -287,6 +298,7 @@ def about():
 # ── API endpoints ─────────────────────────────────────────────────────────────
 
 @app.route("/api/bookmark", methods=["POST"])
+@limiter.limit("30 per minute")
 def toggle_bookmark():
     data = request.get_json()
     article_id = data.get("article_id")
@@ -307,6 +319,7 @@ def toggle_bookmark():
 
 
 @app.route("/api/notes", methods=["POST"])
+@limiter.limit("20 per minute")
 def save_note():
     data = request.get_json()
     article_id = data.get("article_id")
@@ -331,11 +344,44 @@ def save_note():
 
 
 @app.route("/api/notes/<int:note_id>", methods=["DELETE"])
+@limiter.limit("20 per minute")
 def delete_note(note_id):
     db = get_db()
     db.execute("DELETE FROM notes WHERE id = ?", (note_id,))
     db.commit()
     return jsonify({"ok": True})
+
+
+# ── Health check ──────────────────────────────────────────────────────────────
+
+@app.route("/health")
+def health():
+    try:
+        article_count = query_db("SELECT COUNT(*) as c FROM articles", one=True)["c"]
+        return jsonify({
+            "status": "ok",
+            "articles": article_count,
+            "timestamp": datetime.utcnow().isoformat(),
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+# ── Error handlers ────────────────────────────────────────────────────────────
+
+@app.errorhandler(404)
+def not_found(e):
+    return render_template("404.html"), 404
+
+
+@app.errorhandler(429)
+def rate_limited(e):
+    return jsonify({"error": "Too many requests. Please slow down."}), 429
+
+
+@app.errorhandler(500)
+def server_error(e):
+    return render_template("500.html"), 500
 
 
 if __name__ == "__main__":
