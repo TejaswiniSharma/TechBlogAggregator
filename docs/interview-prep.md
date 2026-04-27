@@ -471,7 +471,225 @@ A: End-to-end browser tests (Selenium/Playwright testing the actual UI), the SES
 
 ---
 
-## 13. Common Interviewer Challenges
+## 13. Production Scale Design
+
+> "How would you take this system to production at scale?"
+
+### Production Architecture
+
+```
+CloudFront + WAF
+      ↓
+API Gateway (rate limit, auth, request validation)
+      ↓
+Application Load Balancer
+   ↓              ↓
+Web EC2        Web EC2     ← Auto Scaling Group, stateless
+      ↓
+   RDS PostgreSQL (Multi-AZ)       ElastiCache Redis
+   (articles, users, bookmarks,    (sessions, rate limits,
+    notes, metadata)                AI cache)
+
+EventBridge Scheduler (cron)
+      ↓
+   Lambda/ECS: Crawler ──→ SQS ──→ AI Tagger
+                                  ↓ (on failure)
+                                 DLQ
+      ↓
+   RDS PostgreSQL
+   S3 (raw article content)
+      ↓
+   SES (email notifications)
+```
+
+---
+
+### What Changes vs. Current Design
+
+| Component | Current | Production |
+|-----------|---------|------------|
+| Web server | Single EC2 | Auto Scaling Group behind ALB |
+| Database | SQLite | RDS PostgreSQL Multi-AZ + Read Replica |
+| Cache | None | ElastiCache Redis |
+| Crawler | Cron on EC2 | Lambda triggered by EventBridge |
+| AI Tagger | Sequential on EC2 | ECS worker consuming SQS queue |
+| Secrets | `.env` file | AWS Secrets Manager (auto-rotated) |
+| Monitoring | None | CloudWatch + Sentry + X-Ray |
+| Auth | None | AWS Cognito (Google/GitHub OAuth) |
+
+---
+
+### Per-User Customization (Auth)
+
+- **Cognito** handles OAuth (Google/GitHub sign-in), JWT tokens, user pools
+- Add `user_id` FK to `bookmarks` and `notes` tables — articles stay shared
+- Web server is already stateless (no session on server) — just validate JWT on each request
+- Rate limits move to API Gateway per `user_id` instead of per IP
+
+---
+
+### Service Separation
+
+**Why split Crawler, AI Tagger, and Web into separate services?**
+- **Independent scaling** — AI tagging is slow (Claude API) and doesn't need to scale with web traffic
+- **Fault isolation** — Claude API being down doesn't affect the website
+- **Independent deployment** — deploy new AI prompt without touching web server
+
+**SQS between Crawler and AI Tagger:**
+- Crawler drops article IDs into SQS after fetching
+- AI Tagger workers pull from SQS and process one at a time
+- If Claude is rate-limited, messages wait in queue — no data loss
+- If a message fails 3 times → moves to **Dead Letter Queue (DLQ)** for inspection
+
+---
+
+### Data Layer Decisions
+
+**PostgreSQL over SQLite:**
+- Multi-writer safe (multiple EC2 instances writing simultaneously)
+- Native JSONB with indexing (fix the `tags LIKE '%"caching"%'` full scan)
+- Row-level locking, connection pooling via **RDS Proxy**
+
+**Why RDS Proxy?**
+Each Lambda invocation opens a new DB connection. With 100 concurrent Lambdas, you hit PostgreSQL's connection limit (~100 by default). RDS Proxy pools connections — Lambdas connect to the proxy, proxy maintains a small pool to RDS.
+
+**Redis for:**
+- Homepage query cache (articles change weekly — cache for 1 hour)
+- Rate limit counters (atomic increment with TTL)
+- Session tokens (if not using Cognito)
+- Claude API response cache (same article URL → same analysis, skip re-tagging)
+
+**S3 for raw content:**
+- Store full article HTML/text in S3, keep S3 key in PostgreSQL
+- Cheaper than storing large text blobs in DB at scale
+- Enables re-processing (re-run AI tagger on all historical articles)
+
+**Notes stay in PostgreSQL** (not MongoDB):
+- Notes are flat rows: `{user_id, article_id, content, timestamps}`
+- No nested document structure that would justify MongoDB
+- MongoDB adds operational overhead with no real benefit here
+
+---
+
+### Scheduler Design
+
+**EventBridge for weekly cron** (simple, managed):
+```
+EventBridge rule: cron(0 8 ? * MON *)
+  → triggers Lambda: run_crawler
+  → Lambda writes new article IDs to SQS
+  → AI Tagger ECS workers consume SQS
+```
+
+**DynamoDB scheduler table** (for per-user scheduling):
+Use this when you need user-level scheduling (e.g., "send digest at user's preferred timezone"):
+```
+PK: time_bucket (e.g., "2026-04-14T08:00")   ← keeps writes distributed
+SK: user_id
+Attributes: preferences, last_sent, status
+```
+Time bucket as PK avoids hot partition — all 8AM sends don't land on the same partition key.
+
+---
+
+### Security
+
+- **VPC**: EC2 in public subnet, RDS in private subnet — DB never publicly accessible
+- **Secrets Manager**: DB passwords, API keys stored and auto-rotated — no `.env` files on servers
+- **RDS encryption at rest**: one checkbox, always enable
+- **WAF**: blocks SQL injection, XSS, bad bots at the edge before hitting servers
+- **IAM least privilege**: each service has its own role with only the permissions it needs
+- **Input sanitization**: parameterized queries (already done) + output escaping for XSS
+
+---
+
+### Observability
+
+**The three pillars of production observability:**
+
+**Logs** — CloudWatch Logs (or ELK stack)
+- Structured JSON logs: `{timestamp, level, route, user_id, latency_ms, status}`
+- Every request, every error, every AI tagging result logged
+
+**Metrics** — CloudWatch Alarms → SNS → email/Slack
+- Alert when: error rate > 1%, CPU > 80%, SQS queue depth > 100, RDS connections > 80%
+
+**Traces** — AWS X-Ray
+- Traces a single request across Web → SQS → AI Tagger
+- Shows exactly where latency is coming from in the pipeline
+
+**Error tracking** — Sentry
+- Groups exceptions by type, shows stack traces, alerts on new errors
+- Catches the "Claude returned invalid JSON" errors that currently go unnoticed
+
+---
+
+### Resilience Patterns
+
+**Circuit breaker on Claude API:**
+- After 5 consecutive failures, stop calling Claude for 60 seconds (fail fast)
+- Articles still get keyword tags — AI tags fill in on next successful run
+- Prevents thundering herd when Claude recovers
+
+**Retry with exponential backoff:**
+- RSS fetch failure: retry after 1s, 2s, 4s — then give up and log
+- Claude API 429 (rate limited): back off and retry, don't flood
+
+**RDS Multi-AZ:**
+- Standby replica in a different AZ
+- Automatic failover in ~60 seconds if primary goes down
+- No data loss (synchronous replication)
+
+**RDS Read Replica:**
+- Homepage article queries → read replica
+- Only writes (bookmarks, notes) → primary
+- Keeps read traffic off the primary as you scale
+
+---
+
+### GDPR (Required for .uk domain)
+
+- **Cookie consent banner** — legally required for EU/UK users
+- **Right to deletion** — `DELETE /api/user` removes all user data (notes, bookmarks, account)
+- **Data retention policy** — how long do you keep articles, logs, user data?
+- **Privacy policy page** — what you collect, why, how long
+- **Anthropic as data processor** — article content sent to Claude API falls under their DPA
+
+---
+
+### Cost Controls
+
+- **Billing alerts** — AWS Budget alarm at $10/month
+- **Reserved instances** — 1-year reserved EC2/RDS saves ~40% vs on-demand
+- **Claude API spend cap** — set monthly limit in Anthropic console
+- **S3 lifecycle policies** — move old article content to Glacier after 1 year
+- **CloudFront caching** — cache homepage at CDN layer, reduces EC2 load dramatically
+
+---
+
+### Key Interviewer Follow-Ups & Answers
+
+**"What happens if the AI Tagger is down?"**
+> Messages stay in SQS — no data loss. After 3 failures, the message moves to a Dead Letter Queue for manual inspection. Articles are still served with keyword tags in the meantime. When the tagger recovers, it picks up where it left off.
+
+**"How do you handle DB connection exhaustion with 100 Lambda instances?"**
+> RDS Proxy. Each Lambda connects to the proxy, which maintains a small persistent pool to RDS. Lambda thinks it has a direct connection; RDS sees a stable set of ~10 connections regardless of how many Lambdas are running.
+
+**"How do you deploy a schema change with zero downtime?"**
+> Backward-compatible migrations with Alembic. Step 1: add new column (nullable, no default) — old code still works. Step 2: deploy new code that writes to the new column. Step 3: backfill existing rows. Step 4: add NOT NULL constraint. Never rename or drop a column in the same deploy as the code change that stops using it.
+
+**"How do you know when something is broken in production?"**
+> Three layers: CloudWatch alarm fires when error rate > 1% → SNS notification. Sentry catches and groups exceptions with stack traces. X-Ray shows if latency is spiking in a specific service. Without all three, you're flying blind.
+
+**"Why not MongoDB for notes?"**
+> Notes are flat rows: user_id, article_id, content, timestamps. There's no nested document structure that justifies a document store. Adding MongoDB means another managed service, another connection pool, another thing to back up, another failure mode — with zero benefit over PostgreSQL for this data shape. MongoDB is right when you have genuinely variable, nested document structures like Notion pages or product catalogs.
+
+**"How would you handle a viral traffic spike?"**
+> CloudFront serves cached pages — most traffic never hits EC2. For requests that do reach EC2, the Auto Scaling Group adds instances when CPU > 70%. The ALB health checks route around unhealthy instances. RDS Read Replica handles the read surge. The bottleneck would likely be the write path (bookmarks) — Redis rate limiting prevents abuse, and RDS can handle thousands of writes per second.
+
+---
+
+## 14. Common Interviewer Challenges
 
 **"This seems over-engineered for a personal tool."**
 > That's intentional. The goal was to practice production engineering patterns at a manageable scale. Every decision (WAL mode, Nginx reverse proxy, CI/CD) maps to a real-world concept that comes up in system design interviews. Building it myself gave me hands-on understanding that reading alone wouldn't provide.
