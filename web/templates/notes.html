@@ -193,16 +193,36 @@ function searchNotes(q) {
   }, 300);
 }
 
+// Snapshot all articles from the server-rendered select at load time
+let ALL_ARTICLES = [];
+let PRESELECTED_ID = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+  const sel = document.getElementById('article-select');
+  if (!sel) return;
+  ALL_ARTICLES = Array.from(sel.options).map(o => ({ id: o.value, text: o.text }));
+  // Remember which article was pre-selected by the server (from ?article_id=)
+  if (sel.selectedIndex >= 0) PRESELECTED_ID = sel.options[sel.selectedIndex].value;
+});
+
 function filterArticles(q) {
   const select = document.getElementById('article-select');
-  if (!select) return;
-  const lower = q.toLowerCase();
-  Array.from(select.options).forEach(opt => {
-    opt.hidden = lower ? !opt.text.toLowerCase().includes(lower) : false;
-  });
-  // Auto-select first visible match
-  const first = Array.from(select.options).find(o => !o.hidden);
-  if (first) first.selected = true;
+  if (!select || !ALL_ARTICLES.length) return;
+  const lower = q.toLowerCase().trim();
+  const matches = lower
+    ? ALL_ARTICLES.filter(a => a.text.toLowerCase().includes(lower))
+    : ALL_ARTICLES;
+
+  // Rebuild the option list with only the matching articles
+  select.innerHTML = matches
+    .map(a => `<option value="${a.id}">${escHtml(a.text)}</option>`)
+    .join('');
+
+  if (matches.length > 0) select.selectedIndex = 0;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
 function showNewNote() {
@@ -210,7 +230,7 @@ function showNewNote() {
   const prompt = document.getElementById('select-prompt');
   if (form) form.style.display = 'block';
   if (prompt) prompt.style.display = 'none';
-  // Focus the search input
+  // Focus the search input so the user can start filtering right away
   const search = document.getElementById('article-search');
   if (search) setTimeout(() => search.focus(), 50);
 }
