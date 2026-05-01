@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Search — Distributed Readings{% endblock %}
+
+{% block content %}
+<main class="container" style="padding-top: 32px; padding-bottom: 48px;">
+
+  <div style="margin-bottom: 28px;">
+    {% if query %}
+      <h1 style="font-size: 22px; font-weight: 600; color: var(--bark); margin-bottom: 6px;">
+        Results for <span style="color: var(--leaf);">"{{ query }}"</span>
+      </h1>
+      <p style="font-size: 12px; color: var(--bark-muted);">
+        {{ results|length }} article{{ 's' if results|length != 1 }} found
+      </p>
+    {% else %}
+      <h1 style="font-size: 22px; font-weight: 600; color: var(--bark);">Search articles</h1>
+      <p style="font-size: 12px; color: var(--bark-muted); margin-top: 6px;">
+        Search across article titles, summaries, and AI analysis.
+      </p>
+    {% endif %}
+  </div>
+
+  {% if query and not results %}
+    <div class="empty-state">
+      No articles matched "{{ query }}". Try a different term.
+    </div>
+
+  {% elif results %}
+    <div class="card-grid">
+      {% for article in results %}
+      <div class="card">
+        <div class="card-top">
+          {% set style = get_source_style(article.company) %}
+          <span class="source-pill" style="background: {{ style.bg }}; color: {{ style.text }};">
+            {{ article.company }}
+          </span>
+          <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" class="card-link" aria-label="Open article">↗</a>
+        </div>
+        <a href="{{ article.url }}" target="_blank" rel="noopener noreferrer" style="text-decoration: none;">
+          <h3 class="card-title">
+            {% if article.snip_title and '<mark>' in article.snip_title %}
+              {{ article.snip_title | safe }}
+            {% else %}
+              {{ article.title }}
+            {% endif %}
+          </h3>
+        </a>
+        <p class="card-excerpt">
+          {% if article.snip_ai and '<mark>' in article.snip_ai %}
+            {{ article.snip_ai | safe }}
+          {% elif article.snip_summary and '<mark>' in article.snip_summary %}
+            {{ article.snip_summary | safe }}
+          {% elif article.ai_problem %}
+            {{ article.ai_problem }}
+          {% else %}
+            {{ article.summary }}
+          {% endif %}
+        </p>
+        <div class="card-bottom">
+          <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            {% for tag in parse_tags(article.tags)[:2] %}
+            <span class="tag-pill">{{ tag }}</span>
+            {% endfor %}
+          </div>
+          <div class="card-meta">
+            <span class="read-time">{{ ((article.summary or '')|length // 200 + 3) }} min</span>
+            <button class="bookmark-btn" onclick="toggleBookmark(this, '{{ article.id }}')" aria-label="Bookmark">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z"
+                      stroke="#8B5E3C" stroke-width="1.2" fill="none"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleBookmark(btn, articleId) {
+  fetch('/api/bookmark', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({article_id: articleId})
+  })
+  .then(r => r.json())
+  .then(data => {
+    const path = btn.querySelector('path');
+    path.setAttribute('fill', data.bookmarked ? '#F5EDE5' : 'none');
+    const badge = document.querySelector('.nav-badge');
+    if (data.total_bookmarks > 0) {
+      if (badge) { badge.textContent = data.total_bookmarks; }
+      else {
+        const link = document.querySelector('.nav-bookmarks');
+        const span = document.createElement('span');
+        span.className = 'nav-badge';
+        span.textContent = data.total_bookmarks;
+        link.appendChild(span);
+      }
+    } else if (badge) { badge.remove(); }
+  });
+}
+</script>
+{% endblock %}

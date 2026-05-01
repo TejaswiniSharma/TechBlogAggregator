@@ -68,6 +68,16 @@ def _ensure_tables(conn):
         CREATE INDEX IF NOT EXISTS idx_articles_bookmarked ON articles(bookmarked);
         CREATE INDEX IF NOT EXISTS idx_notes_article ON notes(article_id);
 
+        -- FTS5 virtual table for article search (title + summary + AI analysis)
+        CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(
+            title,
+            summary,
+            ai_problem,
+            ai_solution,
+            content='articles',
+            content_rowid='rowid'
+        );
+
         -- FTS5 virtual table for notes full-text search
         -- Stores an inverted index: word → [note_id, ...]
         -- content_rowid links back to the notes table for lookups
@@ -127,6 +137,12 @@ def add_articles(new_articles: list[dict]) -> dict:
 
     conn.commit()
     total = conn.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+
+    # Rebuild FTS5 index so new articles are immediately searchable
+    if added > 0:
+        conn.execute("INSERT INTO articles_fts(articles_fts) VALUES('rebuild')")
+        conn.commit()
+
     conn.close()
     return {"added": added, "skipped": skipped, "total": total}
 

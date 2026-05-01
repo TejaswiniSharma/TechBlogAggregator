@@ -126,6 +126,33 @@
       transition: border-color 0.15s;
     }
     .nav-bookmarks:hover { border-color: var(--brew); }
+    .nav-search-form {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .nav-search-icon {
+      position: absolute;
+      left: 9px;
+      pointer-events: none;
+    }
+    .nav-search-input {
+      padding: 5px 12px 5px 28px;
+      border: 1px solid var(--border-leaf-strong);
+      border-radius: var(--radius-pill);
+      font-size: 12px;
+      font-family: inherit;
+      background: var(--cream);
+      color: var(--bark);
+      width: 160px;
+      outline: none;
+      transition: border-color 0.15s, width 0.2s;
+    }
+    .nav-search-input:focus {
+      border-color: var(--leaf-mid);
+      width: 220px;
+    }
+    .nav-search-input::placeholder { color: var(--bark-muted); }
     .nav-badge {
       background: var(--brew);
       color: #fff;
@@ -652,6 +679,23 @@
         <a href="/archives" class="nav-link {{ 'active' if request.path == '/archives' }}">archives</a>
         <a href="/notes" class="nav-link {{ 'active' if request.path == '/notes' }}">notes</a>
         <a href="/about" class="nav-link {{ 'active' if request.path == '/about' }}">about</a>
+
+        <!-- Global search bar -->
+        <form action="/search" method="get" class="nav-search-form" role="search">
+          <svg class="nav-search-icon" width="12" height="12" viewBox="0 0 16 16" fill="none">
+            <circle cx="6.5" cy="6.5" r="5" stroke="#7A6B5A" stroke-width="1.5"/>
+            <path d="M10.5 10.5L14 14" stroke="#7A6B5A" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input
+            type="text"
+            name="q"
+            class="nav-search-input"
+            placeholder="Search articles..."
+            value="{{ request.args.get('q', '') }}"
+            autocomplete="off"
+          />
+        </form>
+
         <a href="/bookmarks" class="nav-bookmarks {{ 'active' if request.path == '/bookmarks' }}">
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none">
             <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z" stroke="#8B5E3C" stroke-width="1.3" fill="none"/>

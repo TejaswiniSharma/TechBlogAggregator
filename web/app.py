@@ -35,7 +35,36 @@ def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DB_FILE)
         g.db.row_factory = sqlite3.Row
+        g.db.execute("PRAGMA journal_mode=WAL")
+        _ensure_fts_tables(g.db)
     return g.db
+
+
+def _ensure_fts_tables(db):
+    """Create FTS5 virtual tables and rebuild index if empty."""
+    db.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts USING fts5(
+            title, summary, ai_problem, ai_solution,
+            content='articles', content_rowid='rowid'
+        )
+    """)
+    db.execute("""
+        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+            content, content='notes', content_rowid='id'
+        )
+    """)
+    db.commit()
+
+    # Check if FTS data table is effectively empty (≤2 rows = just root node metadata)
+    # For FTS5 content tables, COUNT(*) reads from the content table so can't use it.
+    # articles_fts_data holds the actual inverted index B-tree nodes.
+    fts_data_rows = db.execute("SELECT COUNT(*) FROM articles_fts_data").fetchone()[0]
+    if fts_data_rows <= 2:
+        art_count = db.execute("SELECT COUNT(*) FROM articles").fetchone()[0]
+        if art_count > 0:
+            # 'rebuild' reads from the content table (articles) and rebuilds the full index
+            db.execute("INSERT INTO articles_fts(articles_fts) VALUES('rebuild')")
+            db.commit()
 
 
 @app.teardown_appcontext
@@ -290,6 +319,27 @@ def notes():
 @app.route("/about")
 def about():
     return render_template("about.html")
+
+
+@app.route("/search")
+def search():
+    q = request.args.get("q", "").strip()
+    results = []
+    if q:
+        fts_query = " OR ".join(f'{word}*' for word in q.split())
+        results = query_db("""
+            SELECT a.id, a.title, a.url, a.company, a.tags,
+                   a.ai_problem, a.summary, a.week_label,
+                   snippet(articles_fts, 0, '<mark>', '</mark>', '...', 20) as snip_title,
+                   snippet(articles_fts, 1, '<mark>', '</mark>', '...', 30) as snip_summary,
+                   snippet(articles_fts, 2, '<mark>', '</mark>', '...', 30) as snip_ai
+            FROM articles_fts
+            JOIN articles a ON articles_fts.rowid = a.rowid
+            WHERE articles_fts MATCH ?
+            ORDER BY rank
+            LIMIT 30
+        """, (fts_query,))
+    return render_template("search.html", results=results, query=q)
 
 
 # ── API endpoints ─────────────────────────────────────────────────────────────
