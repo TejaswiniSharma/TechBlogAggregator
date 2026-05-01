@@ -67,6 +67,15 @@ def _ensure_tables(conn):
         CREATE INDEX IF NOT EXISTS idx_articles_company ON articles(company);
         CREATE INDEX IF NOT EXISTS idx_articles_bookmarked ON articles(bookmarked);
         CREATE INDEX IF NOT EXISTS idx_notes_article ON notes(article_id);
+
+        -- FTS5 virtual table for notes full-text search
+        -- Stores an inverted index: word → [note_id, ...]
+        -- content_rowid links back to the notes table for lookups
+        CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
+            content,
+            content='notes',
+            content_rowid='id'
+        );
     """)
 
 

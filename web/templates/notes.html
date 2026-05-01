@@ -16,20 +16,52 @@
   <div class="notes-layout">
     <!-- Sidebar -->
     <div class="notes-sidebar">
-      {% if notes_list %}
-        {% for note in notes_list %}
-        <a href="/notes?note_id={{ note.note_id }}" class="note-item {{ 'active' if selected and selected.id == note.note_id }}">
-          <div class="note-item-title">{{ note.title }}</div>
-          <div class="note-item-company">
-            {% set style = get_source_style(note.company) %}
-            <span style="color: {{ style.text }};">{{ note.company }}</span>
-          </div>
-          <div class="note-item-date">{{ note.updated_at[:10] if note.updated_at else '' }}</div>
-        </a>
-        {% endfor %}
-      {% else %}
-        <div class="empty-state" style="padding: 24px 0;">No notes yet.</div>
-      {% endif %}
+      <!-- Search bar -->
+      <div style="margin-bottom: 12px; position: relative;">
+        <input
+          id="notes-search"
+          type="text"
+          placeholder="Search notes..."
+          oninput="searchNotes(this.value)"
+          style="
+            width: 100%;
+            padding: 8px 12px 8px 32px;
+            border: 1px solid var(--border-leaf-strong);
+            border-radius: var(--radius-pill);
+            font-size: 12px;
+            background: #fff;
+            color: var(--bark);
+            box-sizing: border-box;
+            outline: none;
+          "
+        />
+        <svg style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); opacity: 0.4;"
+             width="13" height="13" viewBox="0 0 16 16" fill="none">
+          <circle cx="6.5" cy="6.5" r="5" stroke="#2C2416" stroke-width="1.5"/>
+          <path d="M10.5 10.5L14 14" stroke="#2C2416" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Search results (hidden by default) -->
+      <div id="search-results" style="display:none;"></div>
+
+      <!-- Default note list -->
+      <div id="notes-list">
+        {% if notes_list %}
+          {% for note in notes_list %}
+          <a href="/notes?note_id={{ note.note_id }}" class="note-item {{ 'active' if selected and selected.id == note.note_id }}">
+            <div class="note-item-title">{{ note.title }}</div>
+            <div class="note-item-company">
+              {% set style = get_source_style(note.company) %}
+              <span style="color: {{ style.text }};">{{ note.company }}</span>
+            </div>
+            <div class="note-item-date">{{ note.updated_at[:10] if note.updated_at else '' }}</div>
+          </a>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state" style="padding: 24px 0;">No notes yet.</div>
+        {% endif %}
+      </div>
     </div>
 
     <!-- Editor -->
@@ -88,6 +120,43 @@
 
 {% block scripts %}
 <script>
+let searchTimeout = null;
+
+function searchNotes(q) {
+  const resultBox = document.getElementById('search-results');
+  const notesList = document.getElementById('notes-list');
+
+  if (!q.trim()) {
+    resultBox.style.display = 'none';
+    notesList.style.display = 'block';
+    return;
+  }
+
+  // Debounce — wait 300ms after user stops typing
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    fetch('/api/notes/search?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(results => {
+        notesList.style.display = 'none';
+        resultBox.style.display = 'block';
+
+        if (results.length === 0) {
+          resultBox.innerHTML = '<div class="empty-state" style="padding: 24px 0;">No notes match "' + q + '"</div>';
+          return;
+        }
+
+        resultBox.innerHTML = results.map(r => `
+          <a href="/notes?note_id=${r.note_id}" class="note-item">
+            <div class="note-item-title">${r.title}</div>
+            <div class="note-item-company" style="margin-bottom: 4px;">${r.company}</div>
+            <div style="font-size: 11px; color: var(--bark-muted); line-height: 1.5;">${r.snippet}</div>
+          </a>
+        `).join('');
+      });
+  }, 300);
+}
+
 function showNewNote() {
   const form = document.getElementById('new-note-form');
   const prompt = document.getElementById('select-prompt');

@@ -332,9 +332,18 @@ def save_note():
     if note_id:
         db.execute("UPDATE notes SET content = ?, updated_at = ? WHERE id = ?",
                    (content, now, note_id))
+        # Sync FTS5 index — delete old entry, insert updated content
+        db.execute("INSERT INTO notes_fts(notes_fts, rowid, content) VALUES('delete', ?, ?)",
+                   (note_id, content))
+        db.execute("INSERT INTO notes_fts(rowid, content) VALUES(?, ?)", (note_id, content))
     else:
-        db.execute("INSERT INTO notes (article_id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
-                   (article_id, content, now, now))
+        cur = db.execute(
+            "INSERT INTO notes (article_id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
+            (article_id, content, now, now)
+        )
+        new_id = cur.lastrowid
+        # Add to FTS5 index
+        db.execute("INSERT INTO notes_fts(rowid, content) VALUES(?, ?)", (new_id, content))
 
     db.commit()
     return jsonify({"ok": True})
@@ -344,9 +353,37 @@ def save_note():
 @limiter.limit("20 per minute")
 def delete_note(note_id):
     db = get_db()
+    # Remove from FTS5 index before deleting the row
+    note = db.execute("SELECT content FROM notes WHERE id = ?", (note_id,)).fetchone()
+    if note:
+        db.execute("INSERT INTO notes_fts(notes_fts, rowid, content) VALUES('delete', ?, ?)",
+                   (note_id, note["content"]))
     db.execute("DELETE FROM notes WHERE id = ?", (note_id,))
     db.commit()
     return jsonify({"ok": True})
+
+
+@app.route("/api/notes/search")
+def search_notes():
+    q = request.args.get("q", "").strip()
+    if not q:
+        return jsonify([])
+
+    # FTS5 MATCH with prefix search (append * for partial matching)
+    fts_query = " OR ".join(f'{word}*' for word in q.split())
+    results = query_db("""
+        SELECT n.id as note_id, n.content, n.article_id, n.updated_at,
+               a.title, a.company, a.url,
+               snippet(notes_fts, 0, '<mark>', '</mark>', '...', 20) as snippet
+        FROM notes_fts
+        JOIN notes n ON notes_fts.rowid = n.id
+        JOIN articles a ON n.article_id = a.id
+        WHERE notes_fts MATCH ?
+        ORDER BY rank
+        LIMIT 20
+    """, (fts_query,))
+
+    return jsonify([dict(r) for r in results])
 
 
 # ── Health check ──────────────────────────────────────────────────────────────
