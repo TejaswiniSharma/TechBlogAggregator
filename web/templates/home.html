@@ -90,6 +90,13 @@
           </div>
           <div class="card-meta">
             <span class="read-time">{{ ((article.summary or '')|length // 200 + 3) }} min</span>
+            <a href="/notes?article_id={{ article.id }}" class="note-btn" aria-label="Add note" title="Add note">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <path d="M3 2h7l3 3v9H3V2z" stroke="#4A7C59" stroke-width="1.2"/>
+                <path d="M10 2v3h3" stroke="#4A7C59" stroke-width="1.2"/>
+                <path d="M6 7h4M6 10h3" stroke="#4A7C59" stroke-width="1.2" stroke-linecap="round"/>
+              </svg>
+            </a>
             <button class="bookmark-btn" onclick="toggleBookmark(this, '{{ article.id }}')" aria-label="Bookmark">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <path d="M4 2h8a1 1 0 0 1 1 1v10l-5-3-5 3V3a1 1 0 0 1 1-1z"

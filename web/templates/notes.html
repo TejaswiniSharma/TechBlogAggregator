@@ -86,17 +86,53 @@
         </div>
 
       {% else %}
-        <!-- New note form (hidden by default unless no notes) -->
-        <div id="new-note-form" style="{{ '' if not notes_list else 'display:none;' }}">
+        <!-- New note form: shown immediately if article_id pre-selected, else hidden -->
+        <div id="new-note-form" style="{{ '' if (not notes_list or new_article_id) else 'display:none;' }}">
           <div class="note-editor-header">
             <h2 style="font-size: 15px; font-weight: 500; color: var(--bark);">New Note</h2>
           </div>
           <div style="margin-bottom: 12px;">
-            <label style="font-size: 11px; color: var(--bark-muted); text-transform: uppercase; letter-spacing: 0.5px;">Article</label>
-            <select id="article-select" style="width: 100%; margin-top: 4px;">
-              <option value="">Select an article...</option>
+            <label style="font-size: 11px; color: var(--bark-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Article</label>
+            <!-- Search filter input -->
+            <input
+              id="article-search"
+              type="text"
+              placeholder="Type to search articles..."
+              oninput="filterArticles(this.value)"
+              autocomplete="off"
+              style="
+                width: 100%;
+                padding: 7px 10px;
+                border: 1px solid var(--border-leaf-strong);
+                border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+                font-size: 12px;
+                background: #fff;
+                color: var(--bark);
+                box-sizing: border-box;
+                outline: none;
+              "
+            />
+            <!-- Filtered select -->
+            <select
+              id="article-select"
+              size="5"
+              style="
+                width: 100%;
+                border: 1px solid var(--border-leaf-strong);
+                border-top: none;
+                border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+                font-size: 12px;
+                color: var(--bark);
+                background: #fff;
+                box-sizing: border-box;
+                outline: none;
+              "
+            >
               {% for a in all_articles %}
-              <option value="{{ a.id }}">{{ a.company }} — {{ a.title }}</option>
+              <option value="{{ a.id }}"
+                {% if new_article_id and new_article_id == a.id %}selected{% endif %}>
+                {{ a.company }} — {{ a.title }}
+              </option>
               {% endfor %}
             </select>
           </div>
@@ -107,7 +143,7 @@
           </div>
         </div>
 
-        {% if notes_list %}
+        {% if notes_list and not new_article_id %}
         <div id="select-prompt" class="empty-state">
           Select a note from the sidebar, or create a new one.
         </div>
@@ -157,11 +193,26 @@ function searchNotes(q) {
   }, 300);
 }
 
+function filterArticles(q) {
+  const select = document.getElementById('article-select');
+  if (!select) return;
+  const lower = q.toLowerCase();
+  Array.from(select.options).forEach(opt => {
+    opt.hidden = lower ? !opt.text.toLowerCase().includes(lower) : false;
+  });
+  // Auto-select first visible match
+  const first = Array.from(select.options).find(o => !o.hidden);
+  if (first) first.selected = true;
+}
+
 function showNewNote() {
   const form = document.getElementById('new-note-form');
   const prompt = document.getElementById('select-prompt');
   if (form) form.style.display = 'block';
   if (prompt) prompt.style.display = 'none';
+  // Focus the search input
+  const search = document.getElementById('article-search');
+  if (search) setTimeout(() => search.focus(), 50);
 }
 
 function saveNote(noteId, articleId) {

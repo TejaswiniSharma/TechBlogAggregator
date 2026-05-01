@@ -10,7 +10,7 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, jsonify, g
+from flask import Flask, render_template, request, jsonify, redirect, g
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -302,6 +302,17 @@ def notes():
     all_articles = query_db("SELECT id, title, company FROM articles ORDER BY company, title")
 
     selected_note = request.args.get("note_id")
+    new_article_id = request.args.get("article_id")  # pre-select article for new note
+
+    # If arriving from an article card and a note already exists, open that note
+    if new_article_id and not selected_note:
+        existing = query_db(
+            "SELECT id FROM notes WHERE article_id = ? ORDER BY updated_at DESC LIMIT 1",
+            (new_article_id,), one=True
+        )
+        if existing:
+            return redirect(f"/notes?note_id={existing['id']}")
+
     selected = None
     if selected_note:
         selected = query_db("""
@@ -313,7 +324,8 @@ def notes():
     return render_template("notes.html",
                            notes_list=articles_with_notes,
                            all_articles=all_articles,
-                           selected=selected)
+                           selected=selected,
+                           new_article_id=new_article_id)
 
 
 @app.route("/about")
