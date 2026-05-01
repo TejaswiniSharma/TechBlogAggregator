@@ -72,8 +72,8 @@ class TestArchives:
     def test_shows_week_labels(self, flask_client):
         resp = flask_client.get("/archives")
         html = resp.data.decode()
-        # Archives skips the latest 2 weeks; shows older weeks with fetch date format
-        assert "Fetched" in html
+        # Archives skips the latest 2 weeks; shows older weeks as date ranges
+        assert "2026" in html
 
     def test_tag_filter(self, flask_client):
         resp = flask_client.get("/archives?tag=caching")

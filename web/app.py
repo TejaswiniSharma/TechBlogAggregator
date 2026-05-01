@@ -231,21 +231,18 @@ def archives():
         if not articles:
             continue
 
-        fetch_row = query_db(
-            "SELECT MAX(fetched_at) as latest_fetch FROM articles WHERE week_label = ?",
-            (wl,), one=True
-        )
-        if fetch_row and fetch_row["latest_fetch"]:
-            fetch_date = datetime.strptime(fetch_row["latest_fetch"][:10], "%Y-%m-%d")
-        else:
-            fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
+        # Show publication week range (Mon – Sun) derived from ISO week label
+        week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
+        week_end = week_start + timedelta(days=6)
 
-        def _ordinal(d):
-            n = d.day
-            return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
+        # Format: "Mar 30 – Apr 05, 2026"
+        if week_start.month == week_end.month:
+            label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%d, %Y')}"
+        else:
+            label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
 
         week_data.append({
-            "week_label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
+            "week_label": label,
             "count": len(articles),
             "articles": articles,
         })
