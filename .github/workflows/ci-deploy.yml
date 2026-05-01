@@ -54,7 +54,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/Tech-blog-system
+            set -e
+            cd ~/TechBlogAggregator
             git pull origin main
             source venv/bin/activate
             pip install -r requirements.txt --quiet
