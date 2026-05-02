@@ -169,7 +169,8 @@
   text-overflow: ellipsis;
 }
 .article-option:last-child { border-bottom: none; }
-.article-option:hover { background: var(--leaf-soft); color: var(--leaf-dark); }
+.article-option:hover,
+.article-option.highlighted { background: var(--leaf-soft); color: var(--leaf-dark); }
 </style>
 <script>
 // ── Article combobox data (server-rendered) ───────────────────────────────────
@@ -181,14 +182,28 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+let highlightedIdx = -1;
+
+function getOptions() {
+  return Array.from(document.querySelectorAll('#article-dropdown .article-option'));
+}
+
+function setHighlight(idx) {
+  const opts = getOptions();
+  if (!opts.length) return;
+  highlightedIdx = Math.max(0, Math.min(idx, opts.length - 1));
+  opts.forEach((o, i) => o.classList.toggle('highlighted', i === highlightedIdx));
+  opts[highlightedIdx].scrollIntoView({ block: 'nearest' });
+}
+
 function renderDropdown(articles) {
   const dd = document.getElementById('article-dropdown');
   if (!dd) return;
+  highlightedIdx = -1;
   if (articles.length === 0) {
     dd.innerHTML = '<div style="padding:10px 12px;color:var(--bark-muted);font-size:12px;font-style:italic;">No articles match</div>';
     return;
   }
-  // Use data-* attributes to avoid onclick HTML-escaping issues with quotes in titles
   dd.innerHTML = articles.map(a =>
     `<div class="article-option" data-id="${escHtml(a.id)}" data-label="${escHtml(a.label)}">${escHtml(a.label)}</div>`
   ).join('');
@@ -209,7 +224,6 @@ function filterArticles(q) {
   renderDropdown(matches);
   const dd = document.getElementById('article-dropdown');
   if (dd) dd.style.display = 'block';
-  // Clear confirmed selection while the user is actively typing
   document.getElementById('article-id-value').value = '';
 }
 
@@ -218,6 +232,7 @@ function selectArticle(id, label) {
   document.getElementById('article-id-value').value = id;
   const dd = document.getElementById('article-dropdown');
   if (dd) dd.style.display = 'none';
+  highlightedIdx = -1;
 }
 
 // Pre-fill the picker if arriving from an article card (?article_id=...)
@@ -228,7 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (found) document.getElementById('article-search').value = found.label;
   }
 
-  // Single event-delegation listener for dropdown clicks (avoids onclick HTML-escaping issues)
+  // Single event-delegation listener for dropdown clicks
   const dd = document.getElementById('article-dropdown');
   if (dd) {
     dd.addEventListener('click', e => {
@@ -237,11 +252,39 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Keyboard navigation on the search input
+  const searchInput = document.getElementById('article-search');
+  if (searchInput) {
+    searchInput.addEventListener('keydown', e => {
+      const dd = document.getElementById('article-dropdown');
+      const isOpen = dd && dd.style.display !== 'none';
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!isOpen) { openDropdown(); setHighlight(0); }
+        else setHighlight(highlightedIdx < 0 ? 0 : highlightedIdx + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (isOpen) setHighlight(highlightedIdx <= 0 ? 0 : highlightedIdx - 1);
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (isOpen && highlightedIdx >= 0) {
+          const opt = getOptions()[highlightedIdx];
+          if (opt) selectArticle(opt.dataset.id, opt.dataset.label);
+        }
+      } else if (e.key === 'Escape') {
+        if (dd) dd.style.display = 'none';
+        highlightedIdx = -1;
+      }
+    });
+  }
+
   // Close dropdown when clicking outside the picker
   document.addEventListener('click', e => {
     const picker = document.getElementById('article-picker');
     if (picker && !picker.contains(e.target)) {
       if (dd) dd.style.display = 'none';
+      highlightedIdx = -1;
     }
   });
 });
