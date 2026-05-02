@@ -91,50 +91,52 @@
           <div class="note-editor-header">
             <h2 style="font-size: 15px; font-weight: 500; color: var(--bark);">New Note</h2>
           </div>
-          <div style="margin-bottom: 12px;">
+          <!-- Article combobox -->
+          <div id="article-picker" style="position: relative; margin-bottom: 12px;">
             <label style="font-size: 11px; color: var(--bark-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Article</label>
-            <!-- Search filter input -->
-            <input
-              id="article-search"
-              type="text"
-              placeholder="Type to search articles..."
-              oninput="filterArticles(this.value)"
-              autocomplete="off"
-              style="
-                width: 100%;
-                padding: 7px 10px;
-                border: 1px solid var(--border-leaf-strong);
-                border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-                font-size: 12px;
-                background: #fff;
-                color: var(--bark);
-                box-sizing: border-box;
-                outline: none;
-              "
-            />
-            <!-- Filtered select -->
-            <select
-              id="article-select"
-              size="5"
-              style="
-                width: 100%;
-                border: 1px solid var(--border-leaf-strong);
-                border-top: none;
-                border-radius: 0 0 var(--radius-sm) var(--radius-sm);
-                font-size: 12px;
-                color: var(--bark);
-                background: #fff;
-                box-sizing: border-box;
-                outline: none;
-              "
-            >
-              {% for a in all_articles %}
-              <option value="{{ a.id }}"
-                {% if new_article_id and new_article_id == a.id %}selected{% endif %}>
-                {{ a.company }} — {{ a.title }}
-              </option>
-              {% endfor %}
-            </select>
+            <div style="position: relative;">
+              <input
+                id="article-search"
+                type="text"
+                placeholder="Search and select an article..."
+                oninput="filterArticles(this.value)"
+                onfocus="openDropdown()"
+                autocomplete="off"
+                style="
+                  width: 100%;
+                  padding: 8px 32px 8px 10px;
+                  border: 1px solid var(--border-leaf-strong);
+                  border-radius: var(--radius-sm);
+                  font-size: 12px;
+                  background: #fff;
+                  color: var(--bark);
+                  box-sizing: border-box;
+                  outline: none;
+                "
+              />
+              <svg style="position:absolute;right:10px;top:50%;transform:translateY(-50%);pointer-events:none;opacity:0.35;"
+                   width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M2 4l4 4 4-4" stroke="#2C2416" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <!-- Hidden field: stores the confirmed article ID -->
+            <input type="hidden" id="article-id-value" value="{{ new_article_id or '' }}">
+            <!-- Dropdown -->
+            <div id="article-dropdown" style="
+              display: none;
+              position: absolute;
+              top: 100%;
+              left: 0;
+              right: 0;
+              max-height: 220px;
+              overflow-y: auto;
+              background: #fff;
+              border: 1px solid var(--border-leaf-strong);
+              border-top: none;
+              border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+              z-index: 50;
+              box-shadow: var(--shadow-hover);
+            "></div>
           </div>
           <textarea id="new-note-content" placeholder="Write your learnings, takeaways, interview notes..."></textarea>
           <div style="margin-top: 12px; display: flex; gap: 8px;">
@@ -155,20 +157,106 @@
 {% endblock %}
 
 {% block scripts %}
+<style>
+.article-option {
+  padding: 9px 12px;
+  font-size: 12px;
+  color: var(--bark);
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-leaf);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.article-option:last-child { border-bottom: none; }
+.article-option:hover { background: var(--leaf-soft); color: var(--leaf-dark); }
+</style>
 <script>
+// ── Article combobox data (server-rendered) ───────────────────────────────────
+const ARTICLE_DATA = [
+  {% for a in all_articles %}{"id":{{ a.id|tojson }},"label":{{ (a.company + ' — ' + a.title)|tojson }}}{{ ',' if not loop.last }}{% endfor %}
+];
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function renderDropdown(articles) {
+  const dd = document.getElementById('article-dropdown');
+  if (!dd) return;
+  if (articles.length === 0) {
+    dd.innerHTML = '<div style="padding:10px 12px;color:var(--bark-muted);font-size:12px;font-style:italic;">No articles match</div>';
+    return;
+  }
+  // Use data-* attributes to avoid onclick HTML-escaping issues with quotes in titles
+  dd.innerHTML = articles.map(a =>
+    `<div class="article-option" data-id="${escHtml(a.id)}" data-label="${escHtml(a.label)}">${escHtml(a.label)}</div>`
+  ).join('');
+}
+
+function openDropdown() {
+  const dd = document.getElementById('article-dropdown');
+  if (!dd) return;
+  const q = (document.getElementById('article-search').value || '').toLowerCase().trim();
+  const matches = q ? ARTICLE_DATA.filter(a => a.label.toLowerCase().includes(q)) : ARTICLE_DATA;
+  renderDropdown(matches);
+  dd.style.display = 'block';
+}
+
+function filterArticles(q) {
+  const lower = q.toLowerCase().trim();
+  const matches = lower ? ARTICLE_DATA.filter(a => a.label.toLowerCase().includes(lower)) : ARTICLE_DATA;
+  renderDropdown(matches);
+  const dd = document.getElementById('article-dropdown');
+  if (dd) dd.style.display = 'block';
+  // Clear confirmed selection while the user is actively typing
+  document.getElementById('article-id-value').value = '';
+}
+
+function selectArticle(id, label) {
+  document.getElementById('article-search').value = label;
+  document.getElementById('article-id-value').value = id;
+  const dd = document.getElementById('article-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+
+// Pre-fill the picker if arriving from an article card (?article_id=...)
+document.addEventListener('DOMContentLoaded', () => {
+  const preId = (document.getElementById('article-id-value') || {}).value;
+  if (preId) {
+    const found = ARTICLE_DATA.find(a => a.id === preId);
+    if (found) document.getElementById('article-search').value = found.label;
+  }
+
+  // Single event-delegation listener for dropdown clicks (avoids onclick HTML-escaping issues)
+  const dd = document.getElementById('article-dropdown');
+  if (dd) {
+    dd.addEventListener('click', e => {
+      const opt = e.target.closest('.article-option');
+      if (opt) selectArticle(opt.dataset.id, opt.dataset.label);
+    });
+  }
+
+  // Close dropdown when clicking outside the picker
+  document.addEventListener('click', e => {
+    const picker = document.getElementById('article-picker');
+    if (picker && !picker.contains(e.target)) {
+      if (dd) dd.style.display = 'none';
+    }
+  });
+});
+
+// ── Note search (sidebar) ─────────────────────────────────────────────────────
 let searchTimeout = null;
 
 function searchNotes(q) {
   const resultBox = document.getElementById('search-results');
   const notesList = document.getElementById('notes-list');
-
   if (!q.trim()) {
     resultBox.style.display = 'none';
     notesList.style.display = 'block';
     return;
   }
-
-  // Debounce — wait 300ms after user stops typing
   clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
     fetch('/api/notes/search?q=' + encodeURIComponent(q))
@@ -176,63 +264,30 @@ function searchNotes(q) {
       .then(results => {
         notesList.style.display = 'none';
         resultBox.style.display = 'block';
-
         if (results.length === 0) {
-          resultBox.innerHTML = '<div class="empty-state" style="padding: 24px 0;">No notes match "' + q + '"</div>';
+          resultBox.innerHTML = '<div class="empty-state" style="padding:24px 0;">No notes match "' + q + '"</div>';
           return;
         }
-
         resultBox.innerHTML = results.map(r => `
           <a href="/notes?note_id=${r.note_id}" class="note-item">
             <div class="note-item-title">${r.title}</div>
-            <div class="note-item-company" style="margin-bottom: 4px;">${r.company}</div>
-            <div style="font-size: 11px; color: var(--bark-muted); line-height: 1.5;">${r.snippet}</div>
-          </a>
-        `).join('');
+            <div class="note-item-company" style="margin-bottom:4px;">${r.company}</div>
+            <div style="font-size:11px;color:var(--bark-muted);line-height:1.5;">${r.snippet}</div>
+          </a>`).join('');
       });
   }, 300);
 }
 
-// Snapshot all articles from the server-rendered select at load time
-let ALL_ARTICLES = [];
-let PRESELECTED_ID = null;
-
-document.addEventListener('DOMContentLoaded', () => {
-  const sel = document.getElementById('article-select');
-  if (!sel) return;
-  ALL_ARTICLES = Array.from(sel.options).map(o => ({ id: o.value, text: o.text }));
-  // Remember which article was pre-selected by the server (from ?article_id=)
-  if (sel.selectedIndex >= 0) PRESELECTED_ID = sel.options[sel.selectedIndex].value;
-});
-
-function filterArticles(q) {
-  const select = document.getElementById('article-select');
-  if (!select || !ALL_ARTICLES.length) return;
-  const lower = q.toLowerCase().trim();
-  const matches = lower
-    ? ALL_ARTICLES.filter(a => a.text.toLowerCase().includes(lower))
-    : ALL_ARTICLES;
-
-  // Rebuild the option list with only the matching articles
-  select.innerHTML = matches
-    .map(a => `<option value="${a.id}">${escHtml(a.text)}</option>`)
-    .join('');
-
-  if (matches.length > 0) select.selectedIndex = 0;
-}
-
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
+// ── Note actions ──────────────────────────────────────────────────────────────
 function showNewNote() {
   const form = document.getElementById('new-note-form');
   const prompt = document.getElementById('select-prompt');
   if (form) form.style.display = 'block';
   if (prompt) prompt.style.display = 'none';
-  // Focus the search input so the user can start filtering right away
-  const search = document.getElementById('article-search');
-  if (search) setTimeout(() => search.focus(), 50);
+  setTimeout(() => {
+    const s = document.getElementById('article-search');
+    if (s) s.focus();
+  }, 50);
 }
 
 function saveNote(noteId, articleId) {
@@ -244,7 +299,7 @@ function saveNote(noteId, articleId) {
     body: JSON.stringify({note_id: noteId, article_id: articleId, content: content})
   })
   .then(r => r.json())
-  .then(data => {
+  .then(() => {
     status.textContent = 'Saved!';
     status.style.color = 'var(--leaf)';
     setTimeout(() => { status.textContent = ''; }, 2000);
@@ -252,31 +307,25 @@ function saveNote(noteId, articleId) {
 }
 
 function createNote() {
-  const articleId = document.getElementById('article-select').value;
+  const articleId = document.getElementById('article-id-value').value;
   const content = document.getElementById('new-note-content').value;
   const status = document.getElementById('new-save-status');
-
   if (!articleId) { status.textContent = 'Please select an article.'; status.style.color = '#dc2626'; return; }
   if (!content.trim()) { status.textContent = 'Please write something.'; status.style.color = '#dc2626'; return; }
-
   fetch('/api/notes', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({article_id: articleId, content: content})
   })
   .then(r => r.json())
-  .then(data => {
-    if (data.ok) location.reload();
-  });
+  .then(data => { if (data.ok) location.reload(); });
 }
 
 function deleteNote(noteId) {
   if (!confirm('Delete this note?')) return;
   fetch('/api/notes/' + noteId, { method: 'DELETE' })
   .then(r => r.json())
-  .then(data => {
-    if (data.ok) window.location.href = '/notes';
-  });
+  .then(data => { if (data.ok) window.location.href = '/notes'; });
 }
 </script>
 {% endblock %}
