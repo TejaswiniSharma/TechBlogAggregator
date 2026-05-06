@@ -14,7 +14,9 @@ BLOGS = [
     {
         "name": "Netflix Tech Blog",
         "company": "Netflix",
-        "rss_url": "https://netflixtechblog.com/feed",
+        # netflixtechblog.com/feed is the canonical URL but Medium blocks EC2 IPs.
+        # medium.com/feed/netflix-techblog works from server environments.
+        "rss_url": "https://medium.com/feed/netflix-techblog",
         "tags_hint": ["microservices", "chaos-engineering", "streaming", "availability"],
     },
     {
@@ -27,7 +29,10 @@ BLOGS = [
     {
         "name": "Uber Engineering",
         "company": "Uber",
-        "rss_url": "https://www.uber.com/en-US/blog/engineering/rss/",
+        # Uber's RSS URL redirects in a loop that feedparser can't follow (301 → 406).
+        # No valid RSS feed found as of 2026. Switching to scraper when implemented.
+        # "rss_url": "https://www.uber.com/en-US/blog/engineering/rss/",  # broken
+        "scrape_url": "https://www.uber.com/en-US/blog/engineering/",
         "tags_hint": ["real-time-systems", "geospatial", "high-availability", "data-pipelines"],
     },
     {
@@ -39,7 +44,8 @@ BLOGS = [
     {
         "name": "Spotify Engineering",
         "company": "Spotify",
-        "rss_url": "https://engineering.atspotify.com/feed/",
+        # Trailing slash causes a 308 redirect that feedparser can't follow. Remove it.
+        "rss_url": "https://engineering.atspotify.com/feed",
         "tags_hint": ["data-pipelines", "machine-learning", "recommendation-systems"],
     },
     {
@@ -51,19 +57,25 @@ BLOGS = [
     {
         "name": "Stripe Engineering",
         "company": "Stripe",
-        "rss_url": "https://stripe.com/blog/engineering/rss",
+        # Old URL (stripe.com/blog/engineering/rss) returns 404. Correct feed:
+        "rss_url": "https://stripe.com/blog/feed.rss",
         "tags_hint": ["api-design", "payments", "reliability", "distributed-transactions"],
     },
     {
         "name": "DoorDash Engineering",
         "company": "DoorDash",
-        "rss_url": "https://doordash.engineering/feed/",
+        # Returns 403 for all automated agents — no RSS access. Scraper needed.
+        # "rss_url": "https://doordash.engineering/feed/",  # blocked
+        "scrape_url": "https://doordash.engineering/",
         "tags_hint": ["logistics", "real-time-dispatch", "microservices", "ml-ops"],
     },
     {
         "name": "Shopify Engineering",
         "company": "Shopify",
-        "rss_url": "https://engineering.shopify.com/blogs/engineering.atom",
+        # engineering.shopify.com redirects to shopify.engineering, no RSS feed exists.
+        # Switching to scraper.
+        # "rss_url": "https://engineering.shopify.com/blogs/engineering.atom",  # broken
+        "scrape_url": "https://shopify.engineering/",
         "tags_hint": ["scalability", "ecommerce", "ruby-rails", "infrastructure"],
     },
     {

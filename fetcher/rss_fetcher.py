@@ -47,7 +47,12 @@ def fetch_blog(blog_config: dict) -> list[dict]:
         # feedparser handles the HTTP request AND the parsing
         # WHY not use requests + BeautifulSoup?
         # Two libraries to maintain vs one. feedparser is purpose-built for this.
-        feed = feedparser.parse(blog_config["rss_url"])
+        # Pass a browser-like User-Agent — some servers (DoorDash, Medium) block
+        # the default "python-feedparser/x.y.z" agent with 403/406 responses.
+        feed = feedparser.parse(
+            blog_config["rss_url"],
+            agent="Mozilla/5.0 (compatible; TechBlogAggregator/1.0; +https://distributedreadings.uk)"
+        )
 
         # Check if the fetch failed (feedparser doesn't raise exceptions — it sets bozo=True)
         # WHY 'bozo'? It's feedparser's quirky name for malformed/unreachable feeds.
