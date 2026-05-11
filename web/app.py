@@ -150,11 +150,13 @@ def home():
     tag = request.args.get("tag")
     company = request.args.get("company")
 
-    # Get latest 2 weeks
-    weeks = query_db(
-        "SELECT DISTINCT week_label FROM articles WHERE week_label != '' ORDER BY week_label DESC LIMIT 2"
+    # Group homepage by fetch date (DATE(fetched_at)), not publish week.
+    # This ensures all articles from one cron run appear together, regardless
+    # of when they were originally published.
+    fetch_dates = query_db(
+        "SELECT DISTINCT DATE(fetched_at) as fd FROM articles ORDER BY fd DESC LIMIT 2"
     )
-    week_labels = [w["week_label"] for w in weeks]
+    fetch_date_vals = [r["fd"] for r in fetch_dates]
 
     # Get all unique tags
     all_articles_tags = query_db("SELECT tags FROM articles")
@@ -167,11 +169,15 @@ def home():
     # Get all unique companies
     all_companies = sorted([r["company"] for r in query_db("SELECT DISTINCT company FROM articles ORDER BY company")])
 
-    # Build week sections with articles
+    def _ordinal(d):
+        n = d.day
+        return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
+
+    # Build sections — one per fetch date
     week_sections = []
-    for i, wl in enumerate(week_labels):
-        conditions = ["week_label = ?"]
-        params = [wl]
+    for fd in fetch_date_vals:
+        conditions = ["DATE(fetched_at) = ?"]
+        params = [fd]
         if tag:
             conditions.append("tags LIKE ?")
             params.append(f'%"{tag}"%')
@@ -184,20 +190,7 @@ def home():
             f"SELECT * FROM articles WHERE {where} ORDER BY company, title", params
         )
 
-        # Get actual fetch date from the articles themselves
-        fetch_row = query_db(
-            "SELECT MAX(fetched_at) as latest_fetch FROM articles WHERE week_label = ?",
-            (wl,), one=True
-        )
-        if fetch_row and fetch_row["latest_fetch"]:
-            fetch_date = datetime.strptime(fetch_row["latest_fetch"][:10], "%Y-%m-%d")
-        else:
-            fetch_date = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
-
-        def _ordinal(d):
-            n = d.day
-            return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
-
+        fetch_date = datetime.strptime(fd, "%Y-%m-%d")
         week_sections.append({
             "label": f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}",
             "articles": articles,
@@ -206,8 +199,8 @@ def home():
     # Stats
     stats = {
         "new_this_week": query_db(
-            "SELECT COUNT(*) as c FROM articles WHERE week_label = ?",
-            (week_labels[0],) if week_labels else ("",), one=True
+            "SELECT COUNT(*) as c FROM articles WHERE DATE(fetched_at) = ?",
+            (fetch_date_vals[0],) if fetch_date_vals else ("",), one=True
         )["c"],
         "sources": query_db("SELECT COUNT(DISTINCT company) as c FROM articles", one=True)["c"],
     }
@@ -226,10 +219,12 @@ def archives():
     tag = request.args.get("tag")
     company = request.args.get("company")
 
-    # Skip the latest 2 weeks (already shown on home page)
-    weeks = query_db(
-        "SELECT DISTINCT week_label FROM articles WHERE week_label != '' ORDER BY week_label DESC LIMIT -1 OFFSET 2"
+    # Skip the 2 most recent fetch dates (shown on home page), show everything older
+    fetch_dates_all = query_db(
+        "SELECT DISTINCT DATE(fetched_at) as fd FROM articles ORDER BY fd DESC"
     )
+    all_fetch_dates = [r["fd"] for r in fetch_dates_all]
+    archive_dates = all_fetch_dates[2:]  # everything after the top 2
 
     all_articles_tags = query_db("SELECT tags FROM articles")
     all_tags = set()
@@ -240,11 +235,14 @@ def archives():
 
     all_companies = sorted([r["company"] for r in query_db("SELECT DISTINCT company FROM articles ORDER BY company")])
 
+    def _ordinal(d):
+        n = d.day
+        return f"{n}{'th' if 11<=n<=13 else {1:'st',2:'nd',3:'rd'}.get(n%10,'th')}"
+
     week_data = []
-    for w in weeks:
-        wl = w["week_label"]
-        conditions = ["week_label = ?"]
-        params = [wl]
+    for fd in archive_dates:
+        conditions = ["DATE(fetched_at) = ?"]
+        params = [fd]
         if tag:
             conditions.append("tags LIKE ?")
             params.append(f'%"{tag}"%')
@@ -260,15 +258,8 @@ def archives():
         if not articles:
             continue
 
-        # Show publication week range (Mon – Sun) derived from ISO week label
-        week_start = datetime.strptime(f"{wl}-1", "%G-W%V-%u")
-        week_end = week_start + timedelta(days=6)
-
-        # Format: "Mar 30 – Apr 05, 2026"
-        if week_start.month == week_end.month:
-            label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%d, %Y')}"
-        else:
-            label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
+        fetch_date = datetime.strptime(fd, "%Y-%m-%d")
+        label = f"Fetched {fetch_date.strftime('%B')} {_ordinal(fetch_date)}, {fetch_date.strftime('%Y')}"
 
         week_data.append({
             "week_label": label,
