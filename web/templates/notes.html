@@ -76,12 +76,12 @@
               <span style="color: {{ style.text }};">{{ selected.company }}</span>
               · <a href="{{ selected.url }}" target="_blank" style="color: var(--leaf-mid);">Open article ↗</a>
             </span>
-            <button class="btn btn-danger" onclick="deleteNote({{ selected.id }})">Delete</button>
+            <button type="button" class="btn btn-danger" id="existing-note-delete" data-note-id="{{ selected.id }}">Delete</button>
           </div>
         </div>
         <textarea id="note-content">{{ selected.content }}</textarea>
         <div style="margin-top: 12px; display: flex; gap: 8px;">
-          <button class="btn btn-leaf" onclick="saveNote({{ selected.id }}, '{{ selected.article_id }}')">Save</button>
+          <button type="button" class="btn btn-leaf" id="existing-note-save" data-note-id="{{ selected.id }}">Save</button>
           <span id="save-status" style="font-size: 11px; color: var(--bark-muted); align-self: center;"></span>
         </div>
 
@@ -287,6 +287,14 @@ document.addEventListener('DOMContentLoaded', () => {
       highlightedIdx = -1;
     }
   });
+
+  const saveExistingBtn = document.getElementById('existing-note-save');
+  if (saveExistingBtn) saveExistingBtn.addEventListener('click', saveExistingNote);
+  const deleteExistingBtn = document.getElementById('existing-note-delete');
+  if (deleteExistingBtn) deleteExistingBtn.addEventListener('click', () => {
+    const id = deleteExistingBtn.dataset.noteId;
+    if (id) deleteNote(id);
+  });
 });
 
 // ── Note search (sidebar) ─────────────────────────────────────────────────────
@@ -333,19 +341,31 @@ function showNewNote() {
   }, 50);
 }
 
-function saveNote(noteId, articleId) {
-  const content = document.getElementById('note-content').value;
+function saveExistingNote() {
+  const btn = document.getElementById('existing-note-save');
+  const ta = document.getElementById('note-content');
   const status = document.getElementById('save-status');
+  if (!btn || !ta || !status) return;
+  const noteId = btn.dataset.noteId;
   fetch('/api/notes', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({note_id: noteId, article_id: articleId, content: content})
+    body: JSON.stringify({note_id: noteId, content: ta.value})
   })
-  .then(r => r.json())
-  .then(() => {
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (!ok) {
+      status.textContent = data.error || 'Save failed';
+      status.style.color = '#dc2626';
+      return;
+    }
     status.textContent = 'Saved!';
     status.style.color = 'var(--leaf)';
     setTimeout(() => { status.textContent = ''; }, 2000);
+  })
+  .catch(() => {
+    status.textContent = 'Network error';
+    status.style.color = '#dc2626';
   });
 }
 
@@ -360,15 +380,28 @@ function createNote() {
     headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({article_id: articleId, content: content})
   })
-  .then(r => r.json())
-  .then(data => { if (data.ok) location.reload(); });
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (!ok) {
+      status.textContent = (data && data.error) || 'Save failed';
+      status.style.color = '#dc2626';
+      return;
+    }
+    if (data.ok) location.reload();
+  })
+  .catch(() => {
+    status.textContent = 'Network error';
+    status.style.color = '#dc2626';
+  });
 }
 
 function deleteNote(noteId) {
   if (!confirm('Delete this note?')) return;
   fetch('/api/notes/' + noteId, { method: 'DELETE' })
-  .then(r => r.json())
-  .then(data => { if (data.ok) window.location.href = '/notes'; });
+  .then(r => r.json().then(data => ({ ok: r.ok, data })))
+  .then(({ ok, data }) => {
+    if (ok && data.ok) window.location.href = '/notes';
+  });
 }
 </script>
 {% endblock %}

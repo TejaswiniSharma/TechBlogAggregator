@@ -373,16 +373,24 @@ def toggle_bookmark():
 def save_note():
     data = request.get_json()
     article_id = data.get("article_id")
-    content = data.get("content", "").strip()
     note_id = data.get("note_id")
-
-    if not article_id or not content:
-        return jsonify({"error": "article_id and content required"}), 400
+    # Preserve exact text (leading/trailing newlines matter for notes). Only treat
+    # None as empty string — do not .strip() before save, or "clear note" edits fail.
+    raw = data.get("content")
+    if raw is None:
+        content = ""
+    elif isinstance(raw, str):
+        content = raw
+    else:
+        content = str(raw)
 
     db = get_db()
     now = datetime.utcnow().isoformat()
 
     if note_id:
+        exists = db.execute("SELECT 1 FROM notes WHERE id = ?", (note_id,)).fetchone()
+        if not exists:
+            return jsonify({"error": "note not found"}), 404
         db.execute("UPDATE notes SET content = ?, updated_at = ? WHERE id = ?",
                    (content, now, note_id))
         # Sync FTS5 index — delete old entry, insert updated content
@@ -390,6 +398,10 @@ def save_note():
                    (note_id, content))
         db.execute("INSERT INTO notes_fts(rowid, content) VALUES(?, ?)", (note_id, content))
     else:
+        if not article_id:
+            return jsonify({"error": "article_id required"}), 400
+        if not content.strip():
+            return jsonify({"error": "content required for new notes"}), 400
         cur = db.execute(
             "INSERT INTO notes (article_id, content, created_at, updated_at) VALUES (?, ?, ?, ?)",
             (article_id, content, now, now)

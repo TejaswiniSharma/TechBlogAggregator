@@ -170,6 +170,24 @@ class TestNotesAPI:
         data = json.loads(resp.data)
         assert data["ok"] is True
 
+    def test_update_note_allows_empty_content(self, flask_client):
+        """Clearing the editor or saving whitespace-only must persist (regression)."""
+        flask_client.post("/api/notes",
+                          data=json.dumps({
+                              "article_id": "test0001",
+                              "content": "Initial note"
+                          }),
+                          content_type="application/json")
+        resp = flask_client.post("/api/notes",
+                                 data=json.dumps({
+                                     "note_id": 1,
+                                     "content": ""
+                                 }),
+                                 content_type="application/json")
+        assert resp.status_code == 200
+        data = json.loads(resp.data)
+        assert data["ok"] is True
+
     def test_missing_fields_returns_400(self, flask_client):
         resp = flask_client.post("/api/notes",
                                  data=json.dumps({"article_id": "test0001"}),
