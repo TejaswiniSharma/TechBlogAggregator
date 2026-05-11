@@ -388,14 +388,20 @@ def save_note():
     now = datetime.utcnow().isoformat()
 
     if note_id:
-        exists = db.execute("SELECT 1 FROM notes WHERE id = ?", (note_id,)).fetchone()
-        if not exists:
+        old_row = db.execute("SELECT content FROM notes WHERE id = ?", (note_id,)).fetchone()
+        if not old_row:
             return jsonify({"error": "note not found"}), 404
+        old_content = old_row["content"] or ""
         db.execute("UPDATE notes SET content = ?, updated_at = ? WHERE id = ?",
                    (content, now, note_id))
-        # Sync FTS5 index — delete old entry, insert updated content
-        db.execute("INSERT INTO notes_fts(notes_fts, rowid, content) VALUES('delete', ?, ?)",
-                   (note_id, content))
+        # Sync FTS5 index: must pass OLD content to 'delete', then insert new content.
+        # Wrapped in try/except — if the note was never indexed (created before FTS
+        # was set up), the delete command raises; the insert still updates the index.
+        try:
+            db.execute("INSERT INTO notes_fts(notes_fts, rowid, content) VALUES('delete', ?, ?)",
+                       (note_id, old_content))
+        except Exception:
+            pass
         db.execute("INSERT INTO notes_fts(rowid, content) VALUES(?, ?)", (note_id, content))
     else:
         if not article_id:
