@@ -9,6 +9,8 @@ data/articles.json
 data/*.db
 data/*.db-shm
 data/*.db-wal
+# Cron / scripts runtime output (e.g. scripts/weekly_update.sh)
+data/*.log
 
 # IDE
 .idea/
@@ -25,5 +27,6 @@ decks/*.pptx
 # Archives / design files
 *.zip
 
-# Claude Code
-.claude/
+# Claude Code (ignore internals except skills)
+.claude/*
+!.claude/skills
