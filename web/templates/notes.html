@@ -173,6 +173,8 @@
 .article-option.highlighted { background: var(--leaf-soft); color: var(--leaf-dark); }
 </style>
 <script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
 // ── Article combobox data (server-rendered) ───────────────────────────────────
 const ARTICLE_DATA = [
   {% for a in all_articles %}{"id":{{ a.id|tojson }},"label":{{ (a.company + ' — ' + a.title)|tojson }}}{{ ',' if not loop.last }}{% endfor %}
@@ -349,7 +351,7 @@ function saveExistingNote() {
   const noteId = btn.dataset.noteId;
   fetch('/api/notes', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({note_id: noteId, content: ta.value})
   })
   .then(r => r.json().then(data => ({ ok: r.ok, data })))
@@ -377,7 +379,7 @@ function createNote() {
   if (!content.trim()) { status.textContent = 'Please write something.'; status.style.color = '#dc2626'; return; }
   fetch('/api/notes', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({article_id: articleId, content: content})
   })
   .then(r => r.json().then(data => ({ ok: r.ok, data })))
@@ -397,7 +399,7 @@ function createNote() {
 
 function deleteNote(noteId) {
   if (!confirm('Delete this note?')) return;
-  fetch('/api/notes/' + noteId, { method: 'DELETE' })
+  fetch('/api/notes/' + noteId, { method: 'DELETE', headers: {'X-CSRFToken': CSRF_TOKEN} })
   .then(r => r.json().then(data => ({ ok: r.ok, data })))
   .then(({ ok, data }) => {
     if (ok && data.ok) window.location.href = '/notes';

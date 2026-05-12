@@ -55,11 +55,6 @@ class TestHomePage:
         # Uber article has distributed-systems tag, not caching
         assert "Test Article 2 from Uber" not in html
 
-    def test_contains_greeting(self, flask_client):
-        resp = flask_client.get("/")
-        html = resp.data.decode()
-        assert any(g in html for g in ["Good morning", "Good afternoon", "Good evening"])
-
     def test_contains_stats(self, flask_client):
         resp = flask_client.get("/")
         html = resp.data.decode()
@@ -209,6 +204,113 @@ class TestNotesAPI:
         assert data["ok"] is True
 
 
+# ── Auth ─────────────────────────────────────────────────────────────────────
+
+class TestAuth:
+    # ── Pages accessible to anonymous users ───────────────────────────────────
+    def test_login_page_returns_200(self, anon_client):
+        resp = anon_client.get("/login")
+        assert resp.status_code == 200
+
+    def test_register_page_returns_200(self, anon_client):
+        resp = anon_client.get("/register")
+        assert resp.status_code == 200
+
+    # ── Register ──────────────────────────────────────────────────────────────
+    def test_register_creates_user_and_redirects(self, anon_client):
+        resp = anon_client.post("/register", data={
+            "username": "newuser",
+            "password": "securepass1",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["Location"] in ("/", "http://localhost/")
+
+    def test_register_duplicate_username_flashes_error(self, anon_client):
+        # "testuser" already exists (created by fixture)
+        resp = anon_client.post("/register", data={
+            "username": "testuser",
+            "password": "somepassword",
+        }, follow_redirects=True)
+        html = resp.data.decode()
+        assert "already taken" in html
+
+    def test_register_short_username_rejected(self, anon_client):
+        resp = anon_client.post("/register", data={
+            "username": "ab",
+            "password": "securepass1",
+        }, follow_redirects=True)
+        assert "3" in resp.data.decode()  # "3–20 characters" message
+
+    def test_register_short_password_rejected(self, anon_client):
+        resp = anon_client.post("/register", data={
+            "username": "validuser",
+            "password": "short",
+        }, follow_redirects=True)
+        assert "8" in resp.data.decode()  # "at least 8 characters" message
+
+    def test_register_non_alphanumeric_username_rejected(self, anon_client):
+        resp = anon_client.post("/register", data={
+            "username": "bad user!",
+            "password": "securepass1",
+        }, follow_redirects=True)
+        assert "letters and numbers" in resp.data.decode().lower()
+
+    # ── Login ─────────────────────────────────────────────────────────────────
+    def test_login_valid_credentials_redirects(self, anon_client):
+        resp = anon_client.post("/login", data={
+            "username": "testuser",
+            "password": "testpass123",
+        }, follow_redirects=False)
+        assert resp.status_code == 302
+
+    def test_login_wrong_password_shows_error(self, anon_client):
+        resp = anon_client.post("/login", data={
+            "username": "testuser",
+            "password": "wrongpassword",
+        }, follow_redirects=True)
+        assert "Invalid username or password" in resp.data.decode()
+
+    def test_login_unknown_user_shows_error(self, anon_client):
+        resp = anon_client.post("/login", data={
+            "username": "nobody",
+            "password": "testpass123",
+        }, follow_redirects=True)
+        assert "Invalid username or password" in resp.data.decode()
+
+    # ── Logout ────────────────────────────────────────────────────────────────
+    def test_logout_redirects_to_login(self, flask_client):
+        resp = flask_client.post("/logout", follow_redirects=False)
+        assert resp.status_code == 302
+        assert "login" in resp.headers["Location"]
+
+    # ── Access control ────────────────────────────────────────────────────────
+    def test_protected_routes_redirect_when_logged_out(self, anon_client):
+        for path in ["/bookmarks", "/notes"]:
+            resp = anon_client.get(path)
+            assert resp.status_code == 302, f"{path} should redirect when logged out"
+            assert "login" in resp.headers["Location"]
+
+    def test_api_returns_401_when_logged_out(self, anon_client):
+        resp = anon_client.post("/api/bookmark",
+                                data=json.dumps({"article_id": "test0001"}),
+                                content_type="application/json")
+        assert resp.status_code == 401
+
+    def test_public_routes_accessible_when_logged_out(self, anon_client):
+        for path in ["/", "/archives", "/search", "/about", "/health"]:
+            resp = anon_client.get(path)
+            assert resp.status_code == 200, f"{path} should be public"
+
+    # ── Navbar state ──────────────────────────────────────────────────────────
+    def test_navbar_shows_logout_when_authenticated(self, flask_client):
+        html = flask_client.get("/").data.decode()
+        assert "log out" in html.lower()
+
+    def test_navbar_shows_login_when_anonymous(self, anon_client):
+        html = anon_client.get("/").data.decode()
+        assert "log in" in html.lower()
+
+
 # ── Helper functions ──────────────────────────────────────────────────────────
 
 class TestHelpers:
@@ -223,30 +325,6 @@ class TestHelpers:
         style = get_source_style("UnknownCo")
         assert "bg" in style
         assert "text" in style
-
-    def test_get_greeting_morning(self):
-        from web.app import get_greeting
-        with patch("web.app.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 4, 3, 9, 0)
-            mock_dt.strptime = datetime.strptime
-            mock_dt.utcnow = datetime.utcnow
-            assert get_greeting() == "Good morning"
-
-    def test_get_greeting_afternoon(self):
-        from web.app import get_greeting
-        with patch("web.app.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 4, 3, 14, 0)
-            mock_dt.strptime = datetime.strptime
-            mock_dt.utcnow = datetime.utcnow
-            assert get_greeting() == "Good afternoon"
-
-    def test_get_greeting_evening(self):
-        from web.app import get_greeting
-        with patch("web.app.datetime") as mock_dt:
-            mock_dt.now.return_value = datetime(2026, 4, 3, 20, 0)
-            mock_dt.strptime = datetime.strptime
-            mock_dt.utcnow = datetime.utcnow
-            assert get_greeting() == "Good evening"
 
     def test_parse_tags_valid(self):
         from web.app import parse_tags

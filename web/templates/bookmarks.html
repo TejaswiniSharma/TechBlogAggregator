@@ -64,10 +64,12 @@
 
 {% block scripts %}
 <script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
 function removeBookmark(articleId) {
   fetch('/api/bookmark', {
     method: 'POST',
-    headers: {'Content-Type': 'application/json'},
+    headers: {'Content-Type': 'application/json', 'X-CSRFToken': CSRF_TOKEN},
     body: JSON.stringify({article_id: articleId})
   })
   .then(r => r.json())

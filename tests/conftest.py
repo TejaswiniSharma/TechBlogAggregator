@@ -63,28 +63,75 @@ def tmp_db(tmp_path, monkeypatch):
     return db_path
 
 
-@pytest.fixture
-def flask_client(tmp_db, monkeypatch):
-    """
-    Flask test client with a temporary database.
-    """
-    import web.app as web_app
-    monkeypatch.setattr(web_app, "DB_FILE", tmp_db)
-
-    # Initialize tables via storage (which is already patched to tmp_db)
+def _seed_articles():
     from fetcher.storage import add_articles
     add_articles([
         make_article(1, company="Netflix", tags=["caching"], summary="Redis caching at scale"),
         make_article(2, company="Uber", tags=["distributed-systems"], summary="Uber's distributed tracing"),
         make_article(3, company="Netflix", tags=["caching", "databases"], summary="Caching with DynamoDB"),
-        # Articles across 3 weeks so archives (which skips latest 2) has data
         {**make_article(4, company="Airbnb", tags=["microservices"], summary="Airbnb service mesh"),
          "published": "2026-03-23T10:00:00", "fetched_at": "2026-03-23T10:00:00"},
         {**make_article(5, company="Meta", tags=["ml-systems"], summary="Meta ML infra"),
          "published": "2026-03-16T10:00:00", "fetched_at": "2026-03-16T10:00:00"},
     ])
 
+
+@pytest.fixture
+def anon_client(tmp_db, monkeypatch):
+    """
+    Flask test client with no logged-in user and a testuser account pre-created.
+    Use for tests that exercise auth flows (login, register, anonymous access).
+    """
+    import web.app as web_app
+    monkeypatch.setattr(web_app, "DB_FILE", tmp_db)
+    _seed_articles()
+
     web_app.app.config["TESTING"] = True
+    web_app.app.config["WTF_CSRF_ENABLED"] = False
+
     with web_app.app.test_client() as client:
         with web_app.app.app_context():
-            yield client
+            from werkzeug.security import generate_password_hash
+            db = web_app.get_db()
+            db.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                ("testuser", generate_password_hash("testpass123", method="pbkdf2:sha256")),
+            )
+            db.commit()
+        yield client
+
+
+@pytest.fixture
+def flask_client(tmp_db, monkeypatch):
+    """
+    Flask test client with a temporary database and a logged-in test user.
+    CSRF is disabled so API calls don't need tokens.
+    """
+    import web.app as web_app
+    monkeypatch.setattr(web_app, "DB_FILE", tmp_db)
+
+    _seed_articles()
+
+    web_app.app.config["TESTING"] = True
+    web_app.app.config["WTF_CSRF_ENABLED"] = False
+
+    with web_app.app.test_client() as client:
+        # Create test user inside its own app context so DB is properly closed after.
+        with web_app.app.app_context():
+            from werkzeug.security import generate_password_hash
+            db = web_app.get_db()
+            db.execute(
+                "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+                ("testuser", generate_password_hash("testpass123", method="pbkdf2:sha256")),
+            )
+            db.commit()
+            user_id = db.execute(
+                "SELECT id FROM users WHERE username = 'testuser'"
+            ).fetchone()["id"]
+
+        # Inject the Flask-Login session directly so every test request is authenticated.
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(user_id)
+            sess["_fresh"] = True
+
+        yield client
