@@ -98,6 +98,11 @@ BLOGS = [
     },
 ]
 
+for _blog in BLOGS:
+    assert "name" in _blog and "company" in _blog, f"Missing required keys in: {_blog}"
+    assert "rss_url" in _blog or "scrape_url" in _blog, f"No fetch URL in: {_blog['name']}"
+    assert "tags_hint" in _blog, f"Missing tags_hint in: {_blog['name']}"
+
 # WHY A LIST OF DICTS instead of a class?
 # For configuration data that you only READ (never mutate), plain dicts are simpler.
 # A class would add overhead without benefit here.
