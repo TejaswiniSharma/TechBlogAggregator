@@ -235,6 +235,8 @@ SOURCE_STYLES = {
     "Spotify":    {"bg": "#E8F2EC", "text": "#4A7C59"},
     "DoorDash":   {"bg": "#FDF0F4", "text": "#B5527A"},
     "Shopify":    {"bg": "#E8F2EC", "text": "#4A7C59"},
+    "Google":     {"bg": "#EFF5FA", "text": "#2E6A9E"},
+    "Google Cloud": {"bg": "#EFF5FA", "text": "#2E6A9E"},
 }
 DEFAULT_STYLE = {"bg": "#E8F2EC", "text": "#4A7C59"}
 

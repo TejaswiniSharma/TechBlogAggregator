@@ -96,6 +96,23 @@ BLOGS = [
         "rss_url": "https://dropbox.tech/feed",
         "tags_hint": ["storage", "sync-systems", "cloud-infrastructure"],
     },
+    {
+        "name": "Google Developers Blog",
+        "company": "Google",
+        # Standard Blogger Atom feed at /feeds/posts/default — 301-redirects to /rss/
+        # but feedparser handles single 301s fine. Returns valid RSS 2.0.
+        "rss_url": "https://developers.googleblog.com/feeds/posts/default",
+        "tags_hint": ["api-design", "sdks", "mobile-platforms", "web-platform", "ai-ml"],
+    },
+    {
+        "name": "Google Cloud — Developers & Practitioners",
+        "company": "Google Cloud",
+        # GCP architecture, Kubernetes, BigQuery, real production patterns.
+        # Listed as a separate "company" from Google Developers Blog so source
+        # pills stay distinguishable on the homepage.
+        "rss_url": "https://cloudblog.withgoogle.com/topics/developers-practitioners/rss/",
+        "tags_hint": ["cloud-architecture", "kubernetes", "gcp", "devops", "data-platform"],
+    },
 ]
 
 for _blog in BLOGS:
