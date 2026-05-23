@@ -6,6 +6,8 @@ Serves the Botanical Morning-themed website for browsing tech blog articles.
 Run locally: python3 web/app.py
 """
 
+import hashlib
+import hmac
 import json
 import os
 import sqlite3
@@ -694,6 +696,96 @@ def search_notes():
     """, (fts_query, current_user.id))
 
     return jsonify([dict(r) for r in results])
+
+
+# ── Internal: AI tagger callback (called by Lambda after Claude tags an article) ──
+#
+# Auth model: HMAC-SHA256 over the raw request body using a shared secret.
+# Both sides (Flask + Lambda) read the secret from env var INTERNAL_SHARED_SECRET.
+# We exempt this endpoint from CSRF because the caller is server-to-server, not a browser.
+#
+# Payload shapes:
+#   Success: {article_id, ai_problem, ai_solution, ai_concepts: [...], tags: [...]}
+#   Failure: {article_id, error: "..."}           → marks ai_status='failed'
+#
+# Idempotency: replays for already-done articles return 200 without rewriting.
+# This means SQS retries after a partially-successful run are safe.
+
+INTERNAL_SHARED_SECRET = os.environ.get("INTERNAL_SHARED_SECRET", "")
+
+
+@app.route("/api/internal/ai-tag", methods=["POST"])
+@csrf.exempt
+@limiter.exempt
+def internal_ai_tag():
+    # Hard-fail closed if the secret isn't configured — never leave the door open.
+    if not INTERNAL_SHARED_SECRET:
+        return jsonify({"error": "internal endpoint not configured"}), 503
+
+    # Read raw bytes BEFORE parsing JSON — HMAC must match the exact bytes the
+    # client signed. Re-serializing parsed JSON would change whitespace/key order.
+    body = request.get_data()
+    sig_received = request.headers.get("X-Signature", "")
+    sig_expected = hmac.new(
+        INTERNAL_SHARED_SECRET.encode(), body, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(sig_received, sig_expected):
+        return jsonify({"error": "invalid signature"}), 401
+
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        return jsonify({"error": "invalid json"}), 400
+
+    article_id = data.get("article_id")
+    if not article_id:
+        return jsonify({"error": "article_id required"}), 400
+
+    db = get_db()
+    row = db.execute(
+        "SELECT ai_status FROM articles WHERE id = ?", (article_id,)
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "article not found"}), 404
+
+    now = datetime.utcnow().isoformat()
+
+    # Failure branch — Lambda calling to mark a permanently-failed article.
+    if data.get("error"):
+        db.execute(
+            "UPDATE articles SET ai_status = 'failed', ai_tagged_at = ? WHERE id = ?",
+            (now, article_id),
+        )
+        db.commit()
+        return jsonify({"ok": True, "marked": "failed"})
+
+    # Idempotency: if a prior callback already succeeded, do nothing.
+    if row["ai_status"] == "done":
+        return jsonify({"ok": True, "skipped": "already done"})
+
+    # Success branch — write the AI fields and flip status.
+    db.execute(
+        """
+        UPDATE articles SET
+            ai_problem   = ?,
+            ai_solution  = ?,
+            ai_concepts  = ?,
+            tags         = ?,
+            ai_status    = 'done',
+            ai_tagged_at = ?
+        WHERE id = ?
+        """,
+        (
+            data.get("ai_problem", ""),
+            data.get("ai_solution", ""),
+            json.dumps(data.get("ai_concepts", [])),
+            json.dumps(data.get("tags", [])),
+            now,
+            article_id,
+        ),
+    )
+    db.commit()
+    return jsonify({"ok": True})
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

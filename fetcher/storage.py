@@ -29,7 +29,42 @@ def _get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")  # better concurrent read performance
     _ensure_tables(conn)
+    _run_migrations(conn)
     return conn
+
+
+def _run_migrations(conn):
+    """
+    Idempotent forward-only migrations for existing databases.
+
+    Each migration must:
+      1. Check if the change is already applied (no-op if so)
+      2. Apply it
+      3. Be safe to re-run on every connection
+
+    WHY here instead of a real migration tool (Alembic)?
+    Single-developer project, one DB file, no concurrent schema changes.
+    A 10-line check-then-alter beats adding Alembic's dependency + state table.
+    Graduate when you have multiple environments or a team.
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(articles)").fetchall()}
+
+    # M1: ai_status tracks the AI-tagging lifecycle: pending / done / failed
+    # Needed so the SQS producer knows what to enqueue and the callback can be idempotent.
+    if "ai_status" not in cols:
+        conn.execute("ALTER TABLE articles ADD COLUMN ai_status TEXT DEFAULT 'pending'")
+        # Backfill: rows already tagged by the sync AI tagger are 'done'.
+        # Rows where parsing failed (sentinel string) get 'failed' so they don't re-enqueue.
+        conn.execute("""
+            UPDATE articles SET ai_status = 'done'
+            WHERE ai_problem IS NOT NULL
+              AND ai_problem != 'Could not parse AI response.'
+        """)
+        conn.execute("""
+            UPDATE articles SET ai_status = 'failed'
+            WHERE ai_problem = 'Could not parse AI response.'
+        """)
+        conn.commit()
 
 
 def _ensure_tables(conn):
@@ -51,6 +86,7 @@ def _ensure_tables(conn):
             ai_solution TEXT,
             ai_concepts TEXT,
             ai_tagged_at TEXT,
+            ai_status   TEXT DEFAULT 'pending',  -- pending | done | failed (see _run_migrations)
             week_label  TEXT,
             bookmarked  INTEGER DEFAULT 0
         );
@@ -222,7 +258,8 @@ def update_article_ai_analysis(url: str, analysis: dict) -> bool:
             ai_solution = ?,
             ai_concepts = ?,
             tags = ?,
-            ai_tagged_at = ?
+            ai_tagged_at = ?,
+            ai_status = 'done'
         WHERE url = ?
     """, (
         ai.get("problem", ""),
