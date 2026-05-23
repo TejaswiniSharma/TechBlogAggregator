@@ -1,0 +1,8 @@
+# Lambda runtime dependencies — package via:
+#   pip install -r requirements.txt -t package/
+#   cd package && zip -r ../ai_tagger.zip . && cd .. && zip -g ai_tagger.zip handler.py
+#
+# Or use a container image (recommended once we move past Phase 2).
+#
+# urllib, hmac, hashlib, json, logging, os are stdlib → no extra deps for them.
+anthropic>=0.40.0
